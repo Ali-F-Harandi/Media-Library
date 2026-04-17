@@ -8,10 +8,20 @@ build/
 coverage/
 htmlcov/
 
+# Logs
+*.log
+
 # Environment variables
 .env
 .env.local
-*.env.*
+.env.*
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
 
 # Python specific
 __pycache__/
@@ -19,53 +29,22 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
-env/
-venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-*.pot
-*.pyc
-*.pyo
-*.pyd
-.MF
-tags
-TAGS
-ID
-GTAGS
-GRTAGS
-GSYMS
-GPATH
-.DS_Store
-Thumbs.db
+*.so
+*.egg-info/
+.eggs/
 
-# VSCode
-.vscode/
+# Compiled files
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+*.exe
+*.out
 
-# Temporary files
-*.tmp
-*.temp
-*.bak
-*.swp
-*.swo
-
-# MyPy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pytest
-.pytest_cache/
-
-# Compressed files
+# Compression files
 *.zip
 *.gz
 *.tar
@@ -84,8 +63,18 @@ dmypy.json
 *.Z
 *.lz
 *.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
+
+# Coverage reports
+.coverage
+coverage.xml
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+.nyc_output/
+coverage/
+
+# Distribution / packaging
+.pybuild/
+.tox/
 ```
