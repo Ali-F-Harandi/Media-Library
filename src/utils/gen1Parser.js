@@ -1,410 +1,549 @@
 /**
  * Gen 1 Pokémon Save Parser
- * Parses Game Boy Pokémon Red/Blue/Yellow save files
- * 
- * Save file structure for Gen 1:
- * - Total size: 32KB (0x8000 bytes) or 64KB with header
- * - Contains two save slots for redundancy
- * - Each slot is ~0x2000 bytes
+ * Parses Game Boy Pokémon Red/Blue/Yellow save files (32KB)
  */
 
-// Gen 1 Pokémon species names
-const POKEMON_NAMES = [
-  'MissingNo', 'Bulbasaur', 'Ivysaur', 'Venusaur', 'Charmander', 'Charmeleon', 'Charizard',
-  'Squirtle', 'Wartortle', 'Blastoise', 'Caterpie', 'Metapod', 'Butterfree', 'Weedle',
-  'Kakuna', 'Beedrill', 'Pidgey', 'Pidgeotto', 'Pidgeot', 'Rattata', 'Raticate',
-  'Spearow', 'Fearow', 'Ekans', 'Arbok', 'Pikachu', 'Raichu', 'Sandshrew', 'Sandslash',
-  'Nidoran♀', 'Nidorina', 'Nidoqueen', 'Nidoran♂', 'Nidorino', 'Nidoking', 'Clefairy',
-  'Clefable', 'Vulpix', 'Ninetales', 'Jigglypuff', 'Wigglytuff', 'Zubat', 'Golbat',
-  'Oddish', 'Gloom', 'Vileplume', 'Paras', 'Parasect', 'Venonat', 'Venomoth',
-  'Diglett', 'Dugtrio', 'Meowth', 'Persian', 'Psyduck', 'Golduck', 'Mankey', 'Primeape',
-  'Growlithe', 'Arcanine', 'Poliwag', 'Poliwhirl', 'Poliwrath', 'Abra', 'Kadabra',
-  'Alakazam', 'Machop', 'Machoke', 'Machamp', 'Bellsprout', 'Weepinbell', 'Victreebel',
-  'Tentacool', 'Tentacruel', 'Geodude', 'Graveler', 'Golem', 'Ponyta', 'Rapidash',
-  'Slowpoke', 'Slowbro', 'Magnemite', 'Magneton', 'Farfetch\'d', 'Doduo', 'Dodrio',
-  'Seel', 'Dewgong', 'Grimer', 'Muk', 'Shellder', 'Cloyster', 'Gastly', 'Haunter',
-  'Gengar', 'Onix', 'Drowzee', 'Hypno', 'Krabby', 'Kingler', 'Voltorb', 'Electrode',
-  'Exeggcute', 'Exeggutor', 'Cubone', 'Marowak', 'Hitmonlee', 'Hitmonchan', 'Lickitung',
-  'Koffing', 'Weezing', 'Rhyhorn', 'Rhydon', 'Chansey', 'Tangela', 'Kangaskhan',
-  'Horsea', 'Seadra', 'Goldeen', 'Seaking', 'Staryu', 'Starmie', 'Mr. Mime', 'Scyther',
-  'Jynx', 'Electabuzz', 'Magmar', 'Pinsir', 'Tauros', 'Magikarp', 'Gyarados', 'Lapras',
-  'Ditto', 'Eevee', 'Vaporeon', 'Jolteon', 'Flareon', 'Porygon', 'Omanyte', 'Omastar',
-  'Kabuto', 'Kabutops', 'Aerodactyl', 'Snorlax', 'Articuno', 'Zapdos', 'Moltres',
-  'Dratini', 'Dragonair', 'Dragonite', 'Mewtwo', 'Mew'
-];
-
-// Move names for Gen 1
-const MOVE_NAMES = [
-  'None', 'Pound', 'Karate Chop', 'Double Slap', 'Comet Punch', 'Mega Punch', 'Pay Day',
-  'Fire Punch', 'Ice Punch', 'Thunder Punch', 'Scratch', 'Vice Grip', 'Guillotine',
-  'Razor Wind', 'Swords Dance', 'Cut', 'Gust', 'Wing Attack', 'Whirlwind', 'Fly',
-  'Bind', 'Slam', 'Vine Whip', 'Stomp', 'Double Kick', 'Mega Kick', 'Jump Kick',
-  'Rolling Kick', 'Sand Attack', 'Headbutt', 'Horn Attack', 'Fury Attack', 'Horn Drill',
-  'Tackle', 'Body Slam', 'Wrap', 'Take Down', 'Thrash', 'Double-Edge', 'Tail Whip',
-  'Poison Sting', 'Twineedle', 'Pin Missile', 'Leer', 'Bite', 'Growl', 'Roar',
-  'Sing', 'Supersonic', 'Sonic Boom', 'Disable', 'Acid', 'Ember', 'Flamethrower',
-  'Mist', 'Water Gun', 'Hydro Pump', 'Surf', 'Ice Beam', 'Blizzard', 'Psybeam',
-  'Bubble Beam', 'Aurora Beam', 'Hyper Beam', 'Peck', 'Drill Peck', 'Submission',
-  'Low Kick', 'Counter', 'Seismic Toss', 'Strength', 'Absorb', 'Mega Drain',
-  'Leech Seed', 'Growth', 'Razor Leaf', 'Solar Beam', 'Poison Powder', 'Stun Spore',
-  'Sleep Powder', 'Petal Dance', 'String Shot', 'Dragon Rage', 'Fire Spin',
-  'Thunder Shock', 'Thunderbolt', 'Thunder Wave', 'Thunder', 'Rock Throw', 'Earthquake',
-  'Fissure', 'Dig', 'Toxic', 'Confusion', 'Psychic', 'Hypnosis', 'Meditate', 'Agility',
-  'Quick Attack', 'Rage', 'Teleport', 'Night Shade', 'Mimic', 'Screech', 'Double Team',
-  'Recover', 'Harden', 'Minimize', 'Smokescreen', 'Confuse Ray', 'Withdraw', 'Defense Curl',
-  'Barrier', 'Light Screen', 'Haze', 'Reflect', 'Focus Energy', 'Bide', 'Metronome',
-  'Mirror Move', 'Self-Destruct', 'Egg Bomb', 'Lick', 'Smog', 'Sludge', 'Bone Club',
-  'Fire Blast', 'Waterfall', 'Clamp', 'Swift', 'Skull Bash', 'Spike Cannon', 'Constrict',
-  'Amnesia', 'Kinesis', 'Soft-Boiled', 'High Jump Kick', 'Glare', 'Dream Eater',
-  'Poison Gas', 'Barrage', 'Leech Life', 'Lovely Kiss', 'Sky Attack', 'Transform',
-  'Bubble', 'Dizzy Punch', 'Spore', 'Flash', 'Psywave', 'Splash', 'Acid Armor',
-  'Crabhammer', 'Explosion', 'Fury Swipes', 'Bonemerang', 'Rest', 'Rock Slide',
-  'Hyper Fang', 'Sharpen', 'Conversion', 'Tri Attack', 'Super Fang', 'Slash',
-  'Substitute', 'Struggle'
-];
-
-// Type names for Gen 1
-const TYPE_NAMES = [
-  'Normal', 'Fighting', 'Flying', 'Poison', 'Ground', 'Rock', 'Bug', 'Ghost',
-  'Fire', 'Water', 'Grass', 'Electric', 'Psychic', 'Ice', 'Dragon'
-];
+import { POKEMON_NAMES, getPokemonName } from '../data/pokemonNames';
+import { MOVE_NAMES, getMoveName } from '../data/moves';
+import { TYPE_NAMES, getTypeName, getPokemonTypes } from '../data/pokemonTypes';
+import { ITEM_NAMES, getItemName } from '../data/items';
+import { GEN1_BASE_STATS, getBaseStats } from '../data/baseStats';
+import { GEN1_OFFSETS, GEN1_INTERNAL_TO_DEX } from '../data/offsets';
+import { 
+  getUInt16BigEndian, 
+  getUInt24BigEndian, 
+  parseBCD, 
+  countSetBits, 
+  decodeStatus,
+  getAsciiString,
+  decodeText
+} from './byteHelpers';
+import { calculateGen1Stat } from './statCalculator';
 
 /**
- * Read a little-endian 16-bit unsigned integer from a DataView
+ * Get Pokedex flags (owned/seen) from save data
  */
-function readU16LE(dataView, offset) {
-  return dataView.getUint16(offset, true);
-}
+function getPokedexFlags(data, start) {
+  const flags = [];
+  flags.push(false); // Slot for MissingNo
 
-/**
- * Read a little-endian 32-bit unsigned integer from a DataView
- */
-function readU32LE(dataView, offset) {
-  return dataView.getUint32(offset, true);
-}
-
-/**
- * Read a string from the save data (Gen 1 uses special character encoding)
- */
-function readGen1String(dataView, offset, maxLength) {
-  let result = '';
-  for (let i = 0; i < maxLength; i++) {
-    const charCode = dataView.getUint8(offset + i);
-    if (charCode === 0x50 || charCode === 0xFF) break; // End of string markers
-    if (charCode >= 0x04 && charCode <= 0x13) {
-      // Uppercase letters A-Z
-      result += String.fromCharCode(charCode + 0x56);
-    } else if (charCode >= 0x14 && charCode <= 0x1D) {
-      // Lowercase letters a-j (simplified)
-      result += String.fromCharCode(charCode + 0x69);
-    } else if (charCode === 0x1A) {
-      result += '\'';
-    } else if (charCode === 0x1B) {
-      result += '-';
-    } else if (charCode === 0x1C) {
-      result += '?';
-    } else if (charCode === 0x1D) {
-      result += '!';
-    } else if (charCode === 0x1E) {
-      result += '.';
-    } else if (charCode === 0x1F) {
-      result += '×'; // Male symbol
-    } else if (charCode === 0x20) {
-      result += ')'; // Female symbol (actually just a parenthesis in most fonts)
-    } else if (charCode === 0x21) {
-      result += ',';
-    } else if (charCode === 0x22) {
-      result += '/';
-    } else if (charCode === 0x23) {
-      result += ' ';
-    } else {
-      result += '?'; // Unknown character
-    }
-  }
-  return result.trim();
-}
-
-/**
- * Parse a single Pokémon's data from Gen 1 save
- * Gen 1 Pokémon structure is 44 bytes in party, 33 bytes in PC
- */
-function parsePokemon(dataView, offset, isInParty = true) {
-  const pokemonSize = isInParty ? 44 : 33;
-  
-  // Species (1 byte)
-  const speciesId = dataView.getUint8(offset);
-  const name = speciesId < POKEMON_NAMES.length ? POKEMON_NAMES[speciesId] : 'Unknown';
-  
-  // Current HP (2 bytes)
-  const currentHp = readU16LE(dataView, offset + 1);
-  
-  // Level (1 byte)
-  const level = dataView.getUint8(offset + 3);
-  
-  // Status (1 byte) - sleep, poison, burn, freeze, paralysis
-  const status = dataView.getUint8(offset + 4);
-  
-  // Types (2 bytes)
-  const type1Id = dataView.getUint8(offset + 5);
-  const type2Id = dataView.getUint8(offset + 6);
-  const type1 = type1Id < TYPE_NAMES.length ? TYPE_NAMES[type1Id] : 'Normal';
-  const type2 = type2Id < TYPE_NAMES.length ? TYPE_NAMES[type2Id] : null;
-  
-  // Catch rate / Held item (1 byte) - Gen 1 didn't have held items
-  // This is actually the catch rate in Gen 1
-  
-  // Moves (4 moves × 1 byte each = 4 bytes)
-  const moveIds = [];
-  for (let i = 0; i < 4; i++) {
-    moveIds.push(dataView.getUint8(offset + 7 + i));
-  }
-  const moves = moveIds.map(id => id < MOVE_NAMES.length ? MOVE_NAMES[id] : 'None').filter(m => m !== 'None');
-  
-  // Original Trainer ID (2 bytes)
-  const otId = readU16LE(dataView, offset + 11);
-  
-  // Exp (3 bytes)
-  const exp = dataView.getUint8(offset + 13) | 
-              (dataView.getUint8(offset + 14) << 8) | 
-              (dataView.getUint8(offset + 15) << 16);
-  
-  // HP EV (2 bytes) and other stats
-  const hpEv = readU16LE(dataView, offset + 16);
-  const attackEv = readU16LE(dataView, offset + 18);
-  const defenseEv = readU16LE(dataView, offset + 20);
-  const speedEv = readU16LE(dataView, offset + 22);
-  const specialEv = readU16LE(dataView, offset + 24);
-  
-  // IVs (4 bytes total, packed)
-  const ivData = dataView.getUint16(offset + 26, true);
-  const hpIv = ((ivData >> 12) & 0xF);
-  const attackIv = ((ivData >> 8) & 0xF);
-  const defenseIv = ((ivData >> 4) & 0xF);
-  const speedIv = (ivData & 0xF);
-  const specialIv = hpIv; // Special IV = HP IV in Gen 1
-  
-  // Nickname (11 bytes) - only in party
-  let nickname = '';
-  if (isInParty) {
-    nickname = readGen1String(dataView, offset + 28, 11);
-  }
-  
-  // Calculate base stats (simplified approximation)
-  const baseStats = calculateBaseStats(speciesId, level);
-  
-  return {
-    id: speciesId,
-    name,
-    level,
-    currentHp,
-    maxHp: baseStats.hp, // Approximation
-    status: parseStatus(status),
-    types: type2 ? [type1.toLowerCase(), type2.toLowerCase()] : [type1.toLowerCase()],
-    moves,
-    otId,
-    exp,
-    evs: {
-      hp: hpEv,
-      attack: attackEv,
-      defense: defenseEv,
-      speed: speedEv,
-      special: specialEv
-    },
-    ivs: {
-      hp: hpIv,
-      attack: attackIv,
-      defense: defenseIv,
-      speed: speedIv,
-      special: specialIv
-    },
-    nickname: nickname || name,
-    isEgg: false,
-    shiny: false // No shininess in Gen 1
-  };
-}
-
-/**
- * Parse status conditions
- */
-function parseStatus(statusByte) {
-  const conditions = [];
-  if (statusByte & 0x07) conditions.push('Sleep');
-  if (statusByte & 0x08) conditions.push('Poison');
-  if (statusByte & 0x10) conditions.push('Burn');
-  if (statusByte & 0x20) conditions.push('Freeze');
-  if (statusByte & 0x40) conditions.push('Paralysis');
-  if (statusByte & 0x80) conditions.push('Bad Poison');
-  return conditions.length > 0 ? conditions : 'OK';
-}
-
-/**
- * Calculate approximate base stats for a Pokémon
- * This is a simplified version - real calculation is more complex
- */
-function calculateBaseStats(speciesId, level) {
-  // Base stat ranges by species (simplified lookup table)
-  const baseStatsTable = {
-    1: { hp: 45, attack: 49, defense: 49 },   // Bulbasaur
-    4: { hp: 39, attack: 52, defense: 43 },   // Charmander
-    7: { hp: 44, attack: 48, defense: 65 },   // Squirtle
-    25: { hp: 35, attack: 55, defense: 40 },  // Pikachu
-    150: { hp: 106, attack: 110, defense: 90 } // Mewtwo
-  };
-  
-  const base = baseStatsTable[speciesId] || { hp: 50, attack: 50, defense: 50 };
-  
-  // Calculate actual stats at given level (simplified formula)
-  const hp = Math.floor(((base.hp * 2 + 64) * level) / 100) + level + 10;
-  const attack = Math.floor(((base.attack * 2 + 64) * level) / 100) + 5;
-  const defense = Math.floor(((base.defense * 2 + 64) * level) / 100) + 5;
-  
-  return { hp, attack, defense };
-}
-
-/**
- * Find the valid save slot in Gen 1 save data
- * Gen 1 has two save slots, we need to find the one with valid checksum
- */
-function findValidSaveSlot(data) {
-  const SLOT_SIZE = 0x2000;
-  const NUM_SLOTS = 2;
-  
-  for (let i = 0; i < NUM_SLOTS; i++) {
-    const slotOffset = i * SLOT_SIZE;
-    const sectionCount = dataView.getUint8(slotOffset);
+  for (let i = 0; i < 152; i++) {
+    const byteIndex = Math.floor(i / 8);
+    const bitIndex = i % 8;
     
-    // Check if this looks like a valid save
-    if (sectionCount > 0 && sectionCount <= 14) {
-      return slotOffset;
+    if (byteIndex < 19) {
+      const byte = data[start + byteIndex];
+      flags.push((byte & (1 << bitIndex)) !== 0);
+    } else {
+      flags.push(false);
     }
   }
-  
-  return 0; // Default to first slot
+  return flags;
 }
 
 /**
- * Main function to parse Gen 1 save data
+ * Get event flags from save data
  */
-export function parseGen1Save(arrayBuffer) {
-  const data = new Uint8Array(arrayBuffer);
-  const dataView = new DataView(arrayBuffer);
-  
-  // Determine save size and find valid slot
-  let saveOffset = 0;
-  
-  // Check for 64KB save with header
-  if (data.length >= 0x10000) {
-    // Look for save data pattern
-    saveOffset = findValidSaveSlot(data);
+function getEventFlags(data, start) {
+  const flags = [];
+  // Gen 1 Missable Objects array is 32 bytes (256 bits)
+  for (let i = 0; i < 256; i++) {
+    const byteIndex = Math.floor(i / 8);
+    const bitIndex = i % 8;
+    const byte = data[start + byteIndex];
+    flags.push((byte & (1 << bitIndex)) !== 0);
   }
+  return flags;
+}
+
+/**
+ * Parse items from save data
+ */
+function parseItems(view, startOffset, maxCapacity = 20) {
+  const count = view[startOffset];
+  const items = [];
   
-  // Parse trainer info
-  // Trainer name is at offset 0x2598 in the save slot (relative)
-  const trainerNameOffset = saveOffset + 0x2598;
-  const trainerName = readGen1String(dataView, trainerNameOffset, 11);
-  
-  // Trainer ID at 0x25A4
-  const trainerId = readU16LE(dataView, saveOffset + 0x25A4);
-  
-  // Money at 0x25F6 (3 bytes BCD encoded)
-  const moneyBytes = [
-    dataView.getUint8(saveOffset + 0x25F6),
-    dataView.getUint8(saveOffset + 0x25F7),
-    dataView.getUint8(saveOffset + 0x25F8)
+  let currentOffset = startOffset + 1;
+  for (let i = 0; i < count && i < maxCapacity; i++) {
+    const itemId = view[currentOffset];
+    const quantity = view[currentOffset + 1];
+    
+    if (itemId === 0xFF) break;
+
+    items.push({
+      id: itemId,
+      name: getItemName(itemId),
+      count: quantity
+    });
+    
+    currentOffset += 2;
+  }
+  return items;
+}
+
+/**
+ * Parse a single Pokémon structure
+ */
+function parsePokemonStruct(view, offset, isParty, nickname, otName, nicknameRaw, otNameRaw) {
+  const speciesId = view[offset]; 
+  const dexId = GEN1_INTERNAL_TO_DEX[speciesId] || 0;
+
+  const catchRate = view[offset + 0x07];
+
+  const moveIds = [
+    view[offset + 8],
+    view[offset + 9],
+    view[offset + 10],
+    view[offset + 11]
   ];
-  // Convert BCD to decimal
-  const money = ((moneyBytes[0] & 0x0F) * 10000) +
-                (((moneyBytes[0] >> 4) & 0x0F) * 1000) +
-                ((moneyBytes[1] & 0x0F) * 100) +
-                (((moneyBytes[1] >> 4) & 0x0F) * 10) +
-                (moneyBytes[2] & 0x0F);
+
+  const moves = moveIds.map(id => getMoveName(id));
+
+  const pps = [
+    view[offset + 29] & 0x3F,
+    view[offset + 30] & 0x3F,
+    view[offset + 31] & 0x3F,
+    view[offset + 32] & 0x3F
+  ];
   
-  // Badges at 0x25E9 (1 byte, bit flags)
-  const badgesByte = dataView.getUint8(saveOffset + 0x25E9);
-  const badges = [];
-  const badgeNames = ['Boulder', 'Cascade', 'Thunder', 'Rainbow', 'Soul', 'Marsh', 'Volcano', 'Earth'];
-  for (let i = 0; i < 8; i++) {
-    if (badgesByte & (1 << i)) {
-      badges.push(badgeNames[i]);
+  const ppUps = [
+    view[offset + 29] >> 6,
+    view[offset + 30] >> 6,
+    view[offset + 31] >> 6,
+    view[offset + 32] >> 6
+  ];
+
+  const originalTrainerId = getUInt16BigEndian(view, offset + 0x0C);
+
+  const hpEv = getUInt16BigEndian(view, offset + 0x11);
+  const atkEv = getUInt16BigEndian(view, offset + 0x13);
+  const defEv = getUInt16BigEndian(view, offset + 0x15);
+  const spdEv = getUInt16BigEndian(view, offset + 0x17);
+  const spcEv = getUInt16BigEndian(view, offset + 0x19);
+
+  const ivByte1 = view[offset + 0x1B];
+  const ivByte2 = view[offset + 0x1C];
+
+  const atkIv = (ivByte1 >> 4) & 0xF;
+  const defIv = ivByte1 & 0xF;
+  const spdIv = (ivByte2 >> 4) & 0xF;
+  const spcIv = ivByte2 & 0xF;
+  const hpIv = ((atkIv & 1) << 3) | ((defIv & 1) << 2) | ((spdIv & 1) << 1) | (spcIv & 1);
+
+  let currentHp = 0;
+  let maxHp = 0;
+  let attack = 0;
+  let defense = 0;
+  let speed = 0;
+  let special = 0;
+  
+  let level = view[offset + 0x03]; 
+
+  if (isParty) {
+    const partyLevel = view[offset + 33];
+    if (partyLevel > 0) {
+      level = partyLevel;
+    }
+    currentHp = getUInt16BigEndian(view, offset + 1);
+    maxHp = getUInt16BigEndian(view, offset + 34);
+    attack = getUInt16BigEndian(view, offset + 36);
+    defense = getUInt16BigEndian(view, offset + 38);
+    speed = getUInt16BigEndian(view, offset + 40);
+    special = getUInt16BigEndian(view, offset + 42);
+  } else {
+    currentHp = getUInt16BigEndian(view, offset + 1);
+    // For Box Pokemon, stats are not stored. Calculate them using Base Stats + IVs + EVs.
+    const base = GEN1_BASE_STATS[dexId];
+    if (base) {
+      maxHp = calculateGen1Stat(base.hp, hpIv, hpEv, level, true);
+      attack = calculateGen1Stat(base.atk, atkIv, atkEv, level, false);
+      defense = calculateGen1Stat(base.def, defIv, defEv, level, false);
+      speed = calculateGen1Stat(base.spe, spdIv, spdEv, level, false);
+      special = calculateGen1Stat(base.spc, spcIv, spcEv, level, false);
+    } else {
+      maxHp = currentHp; 
     }
   }
+
+  const structSize = isParty ? 44 : 33;
+
+  return {
+    pid: 0,
+    speciesId,
+    dexId,
+    speciesName: getPokemonName(dexId),
+    nickname,
+    isNicknamed: nickname !== getPokemonName(dexId),
+    form: 0,
+    originalTrainerName: otName,
+    originalTrainerId,
+    secretId: 0,
+    originalTrainerGender: 'Male',
+    level,
+    exp: getUInt24BigEndian(view, offset + 14),
+    friendship: 0,
+    hp: currentHp,
+    maxHp,
+    attack,
+    defense,
+    speed,
+    special,
+    spAtk: special,
+    spDef: special,
+    type1: view[offset + 5],
+    type2: view[offset + 6],
+    type1Name: getTypeName(view[offset + 5]),
+    type2Name: getTypeName(view[offset + 6]),
+    status: decodeStatus(view[offset + 4]),
+    catchRate: catchRate,
+    moves,
+    moveIds,
+    movePp: pps,
+    movePpUps: ppUps,
+    isParty,
+    isEgg: false,
+    isShiny: false,
+    gender: 'Genderless',
+    pokerus: 0,
+    
+    iv: { hp: hpIv, attack: atkIv, defense: defIv, speed: spdIv, special: spcIv, spAtk: spcIv, spDef: spcIv },
+    ev: { hp: hpEv, attack: atkEv, defense: defEv, speed: spdEv, special: spcEv, spAtk: spcEv, spDef: spcEv },
+    
+    raw: view.slice(offset, offset + structSize),
+    startOffset: offset,
+    nicknameRaw: nicknameRaw.slice(0),
+    otNameRaw: otNameRaw.slice(0)
+  };
+}
+
+/**
+ * Parse PC box Pokémon
+ */
+function parseBox(view, boxStart) {
+  const boxPokemon = [];
+  const boxCount = view[boxStart];
   
-  // Party Pokémon count at 0x2F2D
-  const partyCount = dataView.getUint8(saveOffset + 0x2F2D);
+  if (boxCount > 20) return []; 
+
+  const boxStructSize = GEN1_OFFSETS.BOX_MON_SIZE;
+  const boxStructsStart = boxStart + 0x16; 
+  const boxOtNamesStart = boxStructsStart + (20 * boxStructSize);
+  const boxNicknamesStart = boxOtNamesStart + (20 * 11);
+
+  for (let i = 0; i < boxCount; i++) {
+    const currentStruct = boxStructsStart + (i * boxStructSize);
+    const currentNickOffset = boxNicknamesStart + (i * 11);
+    const currentOtOffset = boxOtNamesStart + (i * 11);
+    
+    const nickname = decodeText(view, currentNickOffset, 11);
+    const otName = decodeText(view, currentOtOffset, 11);
+    
+    const nicknameRaw = view.slice(currentNickOffset, currentNickOffset + 11);
+    const otNameRaw = view.slice(currentOtOffset, currentOtOffset + 11);
+
+    const pokemon = parsePokemonStruct(view, currentStruct, false, nickname, otName, nicknameRaw, otNameRaw);
+    
+    boxPokemon.push(pokemon);
+  }
+  return boxPokemon;
+}
+
+/**
+ * Parse Daycare Pokémon
+ */
+function parseDaycare(view) {
+  const inUse = view[GEN1_OFFSETS.DAYCARE_IN_USE];
+  if (inUse === 0) return undefined;
+
+  const nickname = decodeText(view, GEN1_OFFSETS.DAYCARE_NAME, 11);
+  const otName = decodeText(view, GEN1_OFFSETS.DAYCARE_OT, 11);
+  const nicknameRaw = view.slice(GEN1_OFFSETS.DAYCARE_NAME, GEN1_OFFSETS.DAYCARE_NAME + 11);
+  const otNameRaw = view.slice(GEN1_OFFSETS.DAYCARE_OT, GEN1_OFFSETS.DAYCARE_OT + 11);
+
+  return parsePokemonStruct(
+    view, 
+    GEN1_OFFSETS.DAYCARE_MON, 
+    false, 
+    nickname, 
+    otName, 
+    nicknameRaw, 
+    otNameRaw
+  );
+}
+
+/**
+ * Parse game options
+ */
+function parseOptions(view) {
+  const byte = view[GEN1_OFFSETS.OPTIONS];
+  const battleAnimation = (byte & 0x80) ? 'Off' : 'On';
+  const battleStyle = (byte & 0x40) ? 'Set' : 'Shift';
+  const speedBits = byte & 0x7;
+  let textSpeed = 'Normal';
+  if (speedBits === 1) textSpeed = 'Fast';
+  if (speedBits === 5) textSpeed = 'Slow';
   
-  // Party Pokémon start at 0x2F2F
-  const partyOffset = saveOffset + 0x2F2F;
+  const soundBits = (byte >> 4) & 0x3;
+  let sound = 'Mono';
+  if (soundBits === 0) sound = 'Mono';
+  else if (soundBits === 1) sound = 'Earphone1'; 
+  else if (soundBits === 2) sound = 'Earphone2';
+  else if (soundBits === 3) sound = 'Earphone3';
+  
+  if (speedBits !== 0 && soundBits === 1) sound = 'Stereo';
+
+  return { textSpeed, battleAnimation, battleStyle, sound };
+}
+
+/**
+ * Parse Hall of Fame teams
+ */
+function parseHallOfFame(view) {
+  const teams = [];
+  const hofStart = 0x0598; 
+  const structSize = 16;
+  const monsPerTeam = 6;
+  const maxTeams = 50;
+
+  for (let i = 0; i < maxTeams; i++) {
+    const teamMons = [];
+    
+    for (let j = 0; j < monsPerTeam; j++) {
+      const offset = hofStart + (i * monsPerTeam * structSize) + (j * structSize);
+      const speciesId = view[offset];
+      const dexId = GEN1_INTERNAL_TO_DEX[speciesId] || 0;
+      
+      if (speciesId === 0 || speciesId === 0xFF || dexId === 0) continue;
+
+      const level = view[offset + 1];
+      const nickname = decodeText(view, offset + 2, 10);
+      const speciesName = getPokemonName(dexId);
+      const finalNickname = (nickname && nickname.trim()) ? nickname : speciesName;
+
+      teamMons.push({ speciesId, dexId, speciesName, nickname: finalNickname, level, types: getPokemonTypes(dexId) });
+    }
+
+    if (teamMons.length > 0) {
+      teams.push({ id: i + 1, pokemon: teamMons });
+    } else {
+      break; 
+    }
+  }
+  return teams.reverse();
+}
+
+/**
+ * Detect game version from save data
+ */
+function detectGameVersion(view, filename) {
+  const potentialHeaderOffsets = [0x30, 0x134];
+  for (const offset of potentialHeaderOffsets) {
+    if (view.byteLength < offset + 16) continue;
+    const title = getAsciiString(view, offset, 16).toUpperCase();
+    if (title.startsWith("POKEMON")) {
+      if (title.includes("RED")) return 'Red';
+      if (title.includes("BLUE")) return 'Blue';
+      if (title.includes("YELL")) return 'Yellow';
+    }
+  }
+  const pikachuFriendship = view[GEN1_OFFSETS.PIKACHU_FRIENDSHIP];
+  if (pikachuFriendship > 0) return 'Yellow';
+  if (filename) {
+    const lower = filename.toLowerCase();
+    if (lower.includes('yellow')) return 'Yellow';
+    if (lower.includes('red')) return 'Red';
+    if (lower.includes('blue')) return 'Blue';
+  }
+  return 'Red';
+}
+
+/**
+ * Validate Gen 1 checksum
+ */
+function validateGen1Checksum(view) {
+  let sum = 0;
+  for (let i = GEN1_OFFSETS.PLAYER_NAME; i <= 0x3522; i++) {
+    sum += view[i];
+  }
+  const calculated = (~sum) & 0xFF;
+  const actual = view[GEN1_OFFSETS.CHECKSUM];
+  return calculated === actual;
+}
+
+/**
+ * Main function to parse Gen 1 save file
+ */
+export function parseGen1Save(buffer, filename = "save.sav") {
+  const view = buffer; 
+  const isValid = validateGen1Checksum(view);
+  const name = decodeText(view, GEN1_OFFSETS.PLAYER_NAME, 11);
+  const rivalName = decodeText(view, GEN1_OFFSETS.RIVAL_NAME, 11);
+  const id = getUInt16BigEndian(view, GEN1_OFFSETS.PLAYER_ID).toString().padStart(5, '0');
+  const money = parseBCD(view, GEN1_OFFSETS.MONEY, 3);
+  const coins = parseBCD(view, GEN1_OFFSETS.CASINO_COINS, 2);
+  const pikachuFriendship = view[GEN1_OFFSETS.PIKACHU_FRIENDSHIP];
+  const hours = view[GEN1_OFFSETS.PLAY_TIME]; 
+  const minutes = view[GEN1_OFFSETS.PLAY_TIME + 2];
+  const playTime = `${hours}h ${minutes.toString().padStart(2, '0')}m`;
+  const badges = view[GEN1_OFFSETS.BADGES];
+  
+  const pokedexOwned = countSetBits(view, GEN1_OFFSETS.POKEDEX_OWNED, 19);
+  const pokedexSeen = countSetBits(view, GEN1_OFFSETS.POKEDEX_SEEN, 19);
+  const pokedexOwnedFlags = getPokedexFlags(view, GEN1_OFFSETS.POKEDEX_OWNED);
+  const pokedexSeenFlags = getPokedexFlags(view, GEN1_OFFSETS.POKEDEX_SEEN);
+  const eventFlags = getEventFlags(view, GEN1_OFFSETS.MISSABLE_OBJECTS);
+
+  const gameVersion = detectGameVersion(view, filename);
+  const options = parseOptions(view);
+  const daycare = parseDaycare(view);
+  const playerStarterId = GEN1_INTERNAL_TO_DEX[view[GEN1_OFFSETS.PLAYER_STARTER]] || 0;
+  const rivalStarterId = GEN1_INTERNAL_TO_DEX[view[GEN1_OFFSETS.RIVAL_STARTER]] || 0;
+  
+  const mapData = {
+    currentMapId: view[GEN1_OFFSETS.CURRENT_MAP],
+    x: view[GEN1_OFFSETS.X_COORD],
+    y: view[GEN1_OFFSETS.Y_COORD],
+    lastMapId: view[GEN1_OFFSETS.LAST_MAP],
+    warpedFromMap: view[GEN1_OFFSETS.WARPED_FROM_MAP]
+  };
+
+  const partyCount = view[GEN1_OFFSETS.PARTY_DATA];
   const party = [];
-  for (let i = 0; i < Math.min(partyCount, 6); i++) {
-    const pokemon = parsePokemon(dataView, partyOffset + (i * 44), true);
-    party.push(pokemon);
+  const partyStart = GEN1_OFFSETS.PARTY_DATA;
+  const partyStructSize = GEN1_OFFSETS.PARTY_MON_SIZE;
+  const partyStructsStart = partyStart + 8;
+  const partyOtNamesStart = partyStructsStart + (6 * partyStructSize);
+  const partyNicknamesStart = partyOtNamesStart + (6 * 11);
+
+  for (let i = 0; i < partyCount; i++) {
+    const currentStruct = partyStructsStart + (i * partyStructSize);
+    const currentNickOffset = partyNicknamesStart + (i * 11);
+    const currentOtOffset = partyOtNamesStart + (i * 11);
+    const nickname = decodeText(view, currentNickOffset, 11);
+    const otName = decodeText(view, currentOtOffset, 11);
+    const nicknameRaw = view.slice(currentNickOffset, currentNickOffset + 11);
+    const otNameRaw = view.slice(currentOtOffset, currentOtOffset + 11);
+    
+    party.push(parsePokemonStruct(view, currentStruct, true, nickname, otName, nicknameRaw, otNameRaw));
   }
-  
-  // PC Pokémon storage
-  // PC box count at 0x2FE3
-  const pcBoxCount = dataView.getUint8(saveOffset + 0x2FE3);
-  
-  // PC Pokémon start at 0x2FE4
-  const pcOffset = saveOffset + 0x2FE4;
-  const pcPokemon = [];
-  for (let i = 0; i < Math.min(pcBoxCount, 50); i++) {
-    const pokemon = parsePokemon(dataView, pcOffset + (i * 33), false);
-    pcPokemon.push(pokemon);
+
+  const currentBoxId = view[GEN1_OFFSETS.CURRENT_BOX_ID] & 0x7F; 
+  const allBoxes = [];
+  for (let i = 0; i < 12; i++) {
+    let boxOffset = 0;
+    if (i < 6) boxOffset = GEN1_OFFSETS.PC_BANK_2_START + (i * GEN1_OFFSETS.BOX_STRUCT_SIZE);
+    else boxOffset = GEN1_OFFSETS.PC_BANK_3_START + ((i - 6) * GEN1_OFFSETS.BOX_STRUCT_SIZE);
+    allBoxes.push(parseBox(view, boxOffset));
   }
-  
+  allBoxes[currentBoxId] = parseBox(view, GEN1_OFFSETS.CURRENT_BOX_DATA);
+
+  const bagItems = parseItems(view, GEN1_OFFSETS.ITEM_BAG, 20);
+  const pcItems = parseItems(view, GEN1_OFFSETS.PC_ITEMS, 50);
+  const hallOfFame = parseHallOfFame(view);
+
+  // Extract badge names
+  const badgeNames = [];
+  const badgeList = ['Boulder', 'Cascade', 'Thunder', 'Rainbow', 'Soul', 'Marsh', 'Volcano', 'Earth'];
+  for (let i = 0; i < 8; i++) {
+    if (badges & (1 << i)) {
+      badgeNames.push(badgeList[i]);
+    }
+  }
+
   return {
     generation: 1,
-    game: 'Pokémon Red/Blue/Yellow',
-    trainer: {
-      name: trainerName || 'Red',
-      id: trainerId,
-      money: money || 3000,
-      badges
+    gameVersion: gameVersion,
+    originalFilename: filename,
+    fileSize: view.length,
+    isValid: isValid,
+    trainer: { 
+      name, 
+      id, 
+      money, 
+      coins, 
+      playTime, 
+      badges: badgeNames,
+      rivalName, 
+      pikachuFriendship, 
+      gender: 'Male' 
     },
+    options,
+    map: mapData,
+    daycare: daycare ? [daycare] : [],
+    playerStarterId,
+    rivalStarterId,
+    pokedexOwned, 
+    pokedexSeen, 
+    pokedexOwnedFlags, 
+    pokedexSeenFlags,
+    eventFlags,
+    partyCount,
     party,
-    pcPokemon,
-    pcBoxCount,
-    raw: {
-      data,
-      dataView
-    }
+    currentBoxId,
+    currentBoxCount: allBoxes[currentBoxId].length,
+    currentBoxPokemon: allBoxes[currentBoxId],
+    pcBoxes: allBoxes,
+    hallOfFame,
+    items: bagItems,
+    pcItems,
+    rawData: view
   };
 }
 
 /**
- * Detect if a save file is Gen 1
+ * Check if a file is a valid Gen 1 save
  */
 export function isGen1Save(arrayBuffer) {
   const data = new Uint8Array(arrayBuffer);
   
-  // Gen 1 saves are typically 32KB or 64KB
-  if (data.length !== 0x8000 && data.length !== 0x10000 && data.length !== 0x2000) {
+  // Gen 1 saves are exactly 32KB (32768 bytes)
+  if (data.length !== 32768 && data.length !== 32784) {
     return false;
   }
   
-  // Check for characteristic Gen 1 data patterns
-  // The section count byte should be in a reasonable range
-  const sectionCount = data[0];
-  if (sectionCount > 0 && sectionCount <= 14) {
-    return true;
-  }
-  
-  // Additional heuristic: check for Pokémon species IDs in expected ranges
-  // Party count should be 1-6
-  if (data.length >= 0x2F2D) {
-    const partyCount = data[0x2F2D];
-    if (partyCount >= 1 && partyCount <= 6) {
-      return true;
-    }
-  }
-  
-  return false;
+  // Validate checksum
+  return validateGen1Checksum(data);
 }
+
+/**
+ * Main entry point for parsing saves
+ */
+export const detectAndParseSave = async (file) => {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const view = new Uint8Array(arrayBuffer);
+    const size = view.length;
+    const filename = file.name;
+
+    console.log(`[Parser] Analyzing: ${filename} (${size} bytes)`);
+
+    // Gen 1 check (32KB)
+    if (size === 32768 || size === 32784) {
+      const isValid = validateGen1Checksum(view);
+      
+      if (!isValid) {
+        return {
+          success: false,
+          error: "Invalid Checksum! This does not look like a valid Gen 1 (Red/Blue/Yellow) save file."
+        };
+      }
+
+      return { success: true, data: parseGen1Save(view, filename) };
+    }
+
+    return { 
+      success: false, 
+      error: `Unsupported File Format.\n\nBilKo's PC only accepts Generation 1 Save Files (32KB .sav).\n\nDetected Size: ${size} bytes.` 
+    };
+
+  } catch (err) {
+    console.error("[Parser Error]", err);
+    return { success: false, error: "Critical error during file structural analysis." };
+  }
+};
 
 export default {
   parseGen1Save,
   isGen1Save,
-  POKEMON_NAMES,
-  MOVE_NAMES,
-  TYPE_NAMES
+  detectAndParseSave
 };
