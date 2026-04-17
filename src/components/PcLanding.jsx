@@ -1,6 +1,20 @@
 import React, { useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
-import { FaDesktop, FaFolderOpen, FaFileCode } from 'react-icons/fa';
+import { FaDesktop, FaFolderOpen, FaFileCode, FaGamepad } from 'react-icons/fa';
+
+// Supported file extensions for different Pokémon generations
+const SUPPORTED_EXTENSIONS = [
+  // Gen 1-2 (Game Boy)
+  '.sav', '.gci', '.dat',
+  // Gen 3 (GBA)
+  '.sav', '.gci',
+  // Gen 4-5 (DS)
+  '.sav', '.dsv',
+  // Gen 6-7 (3DS)
+  '.sav', '.dat', '.bin',
+  // Gen 8-9 (Switch)
+  '.sav', '.bin'
+];
 
 const PcLanding = ({ onFileLoad }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -9,10 +23,14 @@ const PcLanding = ({ onFileLoad }) => {
   const handleFile = (file) => {
     if (!file) return;
     
-    // Basic validation for save files (could be expanded based on specific extensions)
-    if (!file.name.endsWith('.sav') && !file.name.endsWith('.gci') && !file.name.endsWith('.dat')) {
-      // We won't block strictly, but warn if it doesn't look like a save file
-      console.warn("File might not be a valid save file, but attempting to load...");
+    // Validate file extension
+    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+    const isValidExtension = SUPPORTED_EXTENSIONS.includes(fileExtension);
+    
+    if (!isValidExtension) {
+      setError(`Unsupported file type: ${fileExtension}. Please upload a valid Pokémon save file (.sav, .gci, .dat, .bin, .dsv)`);
+      console.warn("File extension not supported:", fileExtension);
+      return;
     }
 
     const reader = new FileReader();
@@ -55,7 +73,7 @@ const PcLanding = ({ onFileLoad }) => {
   const handleClick = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.sav,.gci,.dat,.bin';
+    input.accept = '.sav,.gci,.dat,.bin,.dsv';
     input.onchange = (e) => {
       if (e.target.files && e.target.files.length > 0) {
         handleFile(e.target.files[0]);
@@ -108,7 +126,7 @@ const PcLanding = ({ onFileLoad }) => {
 
               {/* Content inside Screen */}
               <div className="z-10 text-center">
-                <FaDesktop className="text-6xl text-green-500 mx-auto mb-4 animate-pulse" />
+                <FaGamepad className="text-6xl text-green-500 mx-auto mb-4 animate-pulse" />
                 
                 {isDragging ? (
                   <div className="space-y-2">
@@ -119,6 +137,7 @@ const PcLanding = ({ onFileLoad }) => {
                   <div className="space-y-2">
                     <p className="text-green-500 font-mono text-lg blink-cursor">INSERT SAVE DISK</p>
                     <p className="text-gray-500 font-mono text-xs mt-4">Click PC or Drag & Drop</p>
+                    <p className="text-gray-600 font-mono text-[10px] mt-2">Supports Gen 1-9 (.sav, .gci, .dat, .bin, .dsv)</p>
                   </div>
                 )}
               </div>
@@ -153,11 +172,11 @@ const PcLanding = ({ onFileLoad }) => {
         <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4 text-gray-500 text-xs font-mono">
           <div className="p-4 border border-gray-800 rounded bg-gray-900/50">
             <strong className="text-gray-300 block mb-1">STEP 1</strong>
-            Click the monitor or drag your .sav file
+            Click the monitor or drag your save file (.sav, .gci, .dat, .bin, .dsv)
           </div>
           <div className="p-4 border border-gray-800 rounded bg-gray-900/50">
             <strong className="text-gray-300 block mb-1">STEP 2</strong>
-            Edit your Pokémon data safely
+            Edit your Pokémon data safely (Gen 1-9 supported)
           </div>
           <div className="p-4 border border-gray-800 rounded bg-gray-900/50">
             <strong className="text-gray-300 block mb-1">STEP 3</strong>
