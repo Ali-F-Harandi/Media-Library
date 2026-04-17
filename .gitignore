@@ -2,105 +2,14 @@
 # Dependencies
 node_modules/
 
-# Build outputs
-dist/
-build/
-target/
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-.ENV
-.ENV.*
-.env
-.env.*
-
-# Logs
+# Logs and temp files
 *.log
-
-# Coverage
-.coverage
-coverage/
-htmlcov/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Testing
-.pytest_cache/
-.mypy_cache/
-.nyc_output/
-coverage/
-
-# Distribution / packaging
-.Python
-_build/
-buck-out/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
 
 # Environment
 .env
 .env.local
-.env.*
-.venv
-venv/
-ENV/
-.env.bak
-.env.dev
-.env.development
-.env.prod
-.env.production
-.env.staging
-.env.test
-.env.testing
-.env.docker
-.env.example
-.env.sample
-.env.template
-.env.default
-.env.local
-.env.backup
-.env.save
-.env.tmp
-.env.temp
-.env.swp
-.env.swo
-.env~
-.env.bak~
-.env.backup~
-.env.save~
-.env.tmp~
-.env.temp~
-.env.swp~
-.env.swo~
+*.env.*
+
+# Editors
+.vscode/
 ```

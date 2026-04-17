@@ -6,8 +6,10 @@ import {
   TrainerInfo,
   PokemonParty,
   QuickStart,
-  PcLanding
+  PcLanding,
+  Gen1SaveInfo
 } from './components'
+import { parseGen1Save, isGen1Save } from './utils/gen1Parser'
 
 const samplePokemon = [
   { id: 1, name: 'Bulbasaur', type: ['grass', 'poison'], baseStats: { hp: 45, attack: 49, defense: 49 } },
@@ -31,19 +33,48 @@ function App() {
   const [trainerName, setTrainerName] = useState('Red')
   const [trainerMoney, setTrainerMoney] = useState(3000)
   const [pokemonParty, setPokemonParty] = useState([])
+  const [gen1Data, setGen1Data] = useState(null)
 
   // Handle file load from PC Landing page (expects ArrayBuffer and filename)
   const handleFileLoad = useCallback((arrayBuffer, name) => {
     setFileName(name)
     setError(null)
     
-    // Try to decode as text/JSON first for compatibility with existing logic
+    // First, check if this is a Gen 1 save file
+    if (isGen1Save(arrayBuffer)) {
+      try {
+        const parsedData = parseGen1Save(arrayBuffer)
+        setGen1Data(parsedData)
+        setSaveData({ gen1: true, ...parsedData })
+        
+        // Update trainer info from parsed data
+        if (parsedData.trainer) {
+          setTrainerName(parsedData.trainer.name || 'Red')
+          setTrainerMoney(parsedData.trainer.money || 3000)
+        }
+        
+        // Load party Pokémon
+        if (parsedData.party && parsedData.party.length > 0) {
+          setPokemonParty(parsedData.party.slice(0, 6))
+        } else {
+          setPokemonParty([])
+        }
+        
+        return
+      } catch (err) {
+        console.warn("Failed to parse Gen 1 save:", err)
+        setError('Failed to parse Gen 1 save file. File may be corrupted.')
+      }
+    }
+    
+    // Try to decode as text/JSON for compatibility with existing logic
     const decoder = new TextDecoder('utf-8');
     const textContent = decoder.decode(arrayBuffer);
     
     try {
       const data = JSON.parse(textContent)
       setSaveData(data)
+      setGen1Data(null)
       if (data.trainer) {
         setTrainerName(data.trainer.name || 'Red')
         setTrainerMoney(data.trainer.money || 3000)
@@ -57,8 +88,9 @@ function App() {
       // If not JSON, we might be dealing with a binary save file
       // For now, we store the buffer and show a message or default state
       console.warn("Non-JSON file detected. Binary parsing not yet implemented, loading default state.")
-      setError('Binary save files detected. Currently only JSON saves are fully supported for editing.')
+      setError('Binary save files detected. Currently only JSON saves and Gen 1 saves are fully supported for editing.')
       setSaveData({ binary: true }) // Flag that we have binary data
+      setGen1Data(null)
       setPokemonParty([])
       setTrainerName('Unknown')
       setTrainerMoney(0)
@@ -187,22 +219,30 @@ function App() {
           error={error}
         />
 
-        <TrainerInfo
-          trainerName={trainerName}
-          trainerMoney={trainerMoney}
-          onNameChange={setTrainerName}
-          onMoneyChange={setTrainerMoney}
-        />
+        {/* Show Gen 1 Save Info if this is a Gen 1 save */}
+        {gen1Data && <Gen1SaveInfo saveData={gen1Data} />}
 
-        <PokemonParty
-          pokemonParty={pokemonParty}
-          availableMoves={availableMoves}
-          onUpdatePokemon={updatePokemon}
-          onAddPokemon={addPokemon}
-          onRemovePokemon={removePokemon}
-        />
+        {/* Show regular editor components for JSON saves or when not in Gen 1 mode */}
+        {!gen1Data && (
+          <>
+            <TrainerInfo
+              trainerName={trainerName}
+              trainerMoney={trainerMoney}
+              onNameChange={setTrainerName}
+              onMoneyChange={setTrainerMoney}
+            />
 
-        <QuickStart onLoadSample={loadSampleData} />
+            <PokemonParty
+              pokemonParty={pokemonParty}
+              availableMoves={availableMoves}
+              onUpdatePokemon={updatePokemon}
+              onAddPokemon={addPokemon}
+              onRemovePokemon={removePokemon}
+            />
+
+            <QuickStart onLoadSample={loadSampleData} />
+          </>
+        )}
       </main>
 
       <Footer />
