@@ -1,14 +1,160 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pokémon Save Editor</title>
-    <meta name="description" content="Edit your Pokémon save files with this easy-to-use web tool" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BilKo's PC - Gen 1 Save Editor</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <h1 class="logo">🎮 BilKo's PC</h1>
+            <p class="subtitle">Generation 1 Save File Editor</p>
+        </header>
+
+        <!-- DropZone -->
+        <div id="dropzone-container" class="w-full max-w-lg mx-auto relative z-20 -mt-20 mb-12 px-4">
+            <div 
+                id="dropzone"
+                class="flex flex-col items-center transform transition-transform duration-300 hover:scale-105 cursor-pointer"
+            >
+                <!-- Monitor Housing -->
+                <div class="monitor-housing">
+                    <!-- Screen Bezel -->
+                    <div id="screen-bezel" class="screen-bezel">
+                        <!-- The Screen Itself -->
+                        <div id="screen" class="screen">
+                            <!-- Screen Scanlines Effect -->
+                            <div class="scanlines"></div>
+                            <!-- Screen Glare -->
+                            <div class="glare"></div>
+
+                            <input type="file" id="file-input" class="hidden" accept=".sav" />
+
+                            <div class="screen-content">
+                                <div id="screen-icon" class="screen-icon">
+                                    <i data-lucide="monitor" class="icon-svg"></i>
+                                </div>
+                                
+                                <h3 class="screen-title">BilKo's PC</h3>
+                                
+                                <div id="screen-text" class="screen-text">
+                                    CLICK OR DRAG FILES
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Power LED -->
+                    <div class="power-led"></div>
+                </div>
+
+                <!-- Monitor Stand -->
+                <div class="monitor-stand"></div>
+                
+                <!-- Monitor Base -->
+                <div class="monitor-base"></div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading" class="hidden">
+            <div class="loading-spinner">
+                <i data-lucide="loader-2" class="spinner-icon"></i>
+                <p>Parsing save file...</p>
+            </div>
+        </div>
+
+        <!-- Error State -->
+        <div id="error-container" class="hidden">
+            <div class="error-box">
+                <i data-lucide="alert-triangle" class="error-icon"></i>
+                <h3>Error</h3>
+                <p id="error-message"></p>
+                <button id="retry-btn" class="retry-btn">Try Again</button>
+            </div>
+        </div>
+
+        <!-- Save Info Container -->
+        <div id="save-info" class="hidden">
+            <!-- Trainer Card -->
+            <div class="trainer-card-section">
+                <h2 class="section-title">
+                    <i data-lucide="user" class="inline-icon"></i>
+                    Trainer Card
+                </h2>
+                <div class="trainer-card">
+                    <div class="trainer-info">
+                        <div class="trainer-name-display">
+                            <span class="label">Trainer:</span>
+                            <span id="trainer-name" class="value"></span>
+                        </div>
+                        <div class="trainer-id-display">
+                            <span class="label">ID:</span>
+                            <span id="trainer-id" class="value"></span>
+                        </div>
+                        <div class="trainer-money-display">
+                            <span class="label">Money:</span>
+                            <span id="trainer-money" class="value"></span>
+                        </div>
+                        <div class="trainer-playtime-display">
+                            <span class="label">Play Time:</span>
+                            <span id="trainer-playtime" class="value"></span>
+                        </div>
+                    </div>
+                    <div class="badges-display">
+                        <span class="label">Badges:</span>
+                        <div id="badges-container" class="badges-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Party Pokémon -->
+            <div class="party-section">
+                <h2 class="section-title">
+                    <i data-lucide="users" class="inline-icon"></i>
+                    Party Pokémon (<span id="party-count">0</span>/6)
+                </h2>
+                <div id="party-container" class="pokemon-grid"></div>
+            </div>
+
+            <!-- PC Box -->
+            <div class="pc-section">
+                <h2 class="section-title">
+                    <i data-lucide="briefcase" class="inline-icon"></i>
+                    PC Box <span id="current-box-id">(Box 1)</span>
+                </h2>
+                <div id="pc-container" class="pokemon-grid-compact"></div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button id="upload-new-btn" class="action-btn primary">
+                    <i data-lucide="upload-cloud" class="btn-icon"></i>
+                    Upload New Save
+                </button>
+                <button id="download-btn" class="action-btn secondary">
+                    <i data-lucide="download" class="btn-icon"></i>
+                    Download Modified Save
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="data/pokemonNames.js"></script>
+    <script src="data/moves.js"></script>
+    <script src="data/types.js"></script>
+    <script src="data/items.js"></script>
+    <script src="data/baseStats.js"></script>
+    <script src="data/offsets.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/parser.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+</body>
 </html>

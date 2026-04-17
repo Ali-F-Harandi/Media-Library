@@ -1,8 +1,0 @@
-export { default as PokemonCard } from './PokemonCard'
-export { default as TrainerInfo } from './TrainerInfo'
-export { default as FileOperations } from './FileOperations'
-export { default as PokemonParty } from './PokemonParty'
-export { default as QuickStart } from './QuickStart'
-export { default as PcLanding } from './PcLanding'
-export { default as Gen1SaveInfo } from './Gen1SaveInfo'
-export { Header, Footer } from './Layout'
