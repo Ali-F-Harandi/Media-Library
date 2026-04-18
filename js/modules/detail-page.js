@@ -281,6 +281,8 @@ async function copyMoviePath(idx) {
 
 // Go to collection tab and show specific collection
 window.goToCollection = function(setName) {
+    console.log('[Collections Debug] goToCollection called with setName:', setName);
+    
     // Close detail page first
     closeDetailPage();
     
@@ -288,32 +290,40 @@ window.goToCollection = function(setName) {
     if (!window.collectionsData || window.collectionsData.length === 0) {
         // Extract collections if not already done
         if (typeof window.Collections !== 'undefined' && window.Collections.renderCollections) {
+            console.log('[Collections Debug] Extracting collections...');
             window.Collections.renderCollections();
         }
     }
+    
+    console.log('[Collections Debug] collectionsData length:', window.collectionsData ? window.collectionsData.length : 0);
     
     // Find collection index by name
     var collectionIdx = -1;
     if (window.collectionsData) {
         for (var i = 0; i < window.collectionsData.length; i++) {
+            console.log('[Collections Debug] Checking collection', i, ':', window.collectionsData[i].name);
             if (window.collectionsData[i].name === setName) {
                 collectionIdx = i;
+                console.log('[Collections Debug] Found collection at index:', collectionIdx);
                 break;
             }
         }
     }
     
     if (collectionIdx === -1) {
+        console.error('[Collections Debug] Collection not found:', setName);
         window.Utils.showToast('Collection not found', 'warning');
         return;
     }
     
     // Switch to collections tab and show the collection
     setTimeout(function() {
+        console.log('[Collections Debug] Calling switchTab and showCollectionDetail');
         if (typeof window.Collections !== 'undefined' && window.Collections.showCollectionDetail) {
             window.switchTab('collections');
             window.Collections.showCollectionDetail(collectionIdx);
         } else {
+            console.error('[Collections Debug] Collections module not loaded or showCollectionDetail not available');
             window.Utils.showToast('Collections module not loaded', 'warning');
         }
     }, 300);

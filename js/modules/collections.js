@@ -36,13 +36,25 @@
 
     // Render collections grid
     function renderCollections() {
+        console.log('[Collections Debug] renderCollections called');
+        console.log('[Collections Debug] window.allMovies length:', window.allMovies ? window.allMovies.length : 0);
+        
         var container = document.getElementById('collectionsContainer');
         var emptyState = document.getElementById('collectionsEmptyState');
         var countEl = document.getElementById('collectionsCount');
         
-        if (!container) return;
+        if (!container) {
+            console.error('[Collections Debug] collectionsContainer not found');
+            return;
+        }
         
         extractCollections();
+        
+        console.log('[Collections Debug] After extract - collectionsData length:', window.collectionsData.length);
+        if (window.collectionsData.length > 0) {
+            console.log('[Collections Debug] First collection:', window.collectionsData[0].name, 
+                'movies:', window.collectionsData[0].movies.length);
+        }
         
         countEl.textContent = window.collectionsData.length + ' collection' + 
             (window.collectionsData.length !== 1 ? 's' : '') + ' found';
@@ -131,8 +143,16 @@
 
     // Show collection detail view
     window.showCollectionDetail = function(collectionIdx) {
+        console.log('[Collections Debug] showCollectionDetail called with index:', collectionIdx);
+        console.log('[Collections Debug] collectionsData:', window.collectionsData);
+        
         var collection = window.collectionsData[collectionIdx];
-        if (!collection) return;
+        if (!collection) {
+            console.error('[Collections Debug] Collection not found at index:', collectionIdx);
+            return;
+        }
+        
+        console.log('[Collections Debug] Found collection:', collection.name, 'with', collection.movies.length, 'movies');
         
         window.currentCollection = collection;
         
@@ -144,10 +164,14 @@
         
         // Render movie grid
         var grid = document.getElementById('collectionDetailGrid');
-        if (!grid) return;
+        if (!grid) {
+            console.error('[Collections Debug] collectionDetailGrid element not found');
+            return;
+        }
         
         var html = collection.movies.map(function(movie, idx) {
             var realIdx = window.allMovies.indexOf(movie);
+            console.log('[Collections Debug] Movie', idx, ':', movie.title, 'realIdx:', realIdx);
             var rating = movie.nfoData && movie.nfoData.rating;
             
             return '<div class="movie-card" style="cursor:pointer" onclick="window.Collections.showMovieFromCollection(' + realIdx + ')">' +
@@ -179,6 +203,7 @@
             '</div>';
         }).join('');
         
+        console.log('[Collections Debug] Rendering', collection.movies.length, 'movies to grid');
         grid.innerHTML = html;
         
         // Switch to collection detail view
@@ -201,6 +226,8 @@
 
     // Tab switching function
     window.switchTab = function(tabName) {
+        console.log('[Collections Debug] switchTab called with:', tabName);
+        
         // Hide all tabs
         document.querySelectorAll('.tab-content').forEach(function(tab) {
             tab.classList.remove('active');
@@ -211,16 +238,28 @@
             tab.classList.remove('active');
         });
         
-        // Show selected tab
-        var targetTab = document.getElementById(tabName + 'Tab') || document.getElementById(tabName);
-        if (targetTab) {
-            targetTab.classList.add('active');
+        // Show selected tab - handle collectionDetailView specially
+        var targetTab;
+        if (tabName === 'collectionDetail') {
+            targetTab = document.getElementById('collectionDetailView');
+            console.log('[Collections Debug] Looking for collectionDetailView element:', targetTab);
+        } else {
+            targetTab = document.getElementById(tabName + 'Tab') || document.getElementById(tabName);
         }
         
-        // Activate nav tab
-        var navTab = document.querySelector('.nav-tab[data-tab="' + tabName + '"]');
-        if (navTab) {
-            navTab.classList.add('active');
+        if (targetTab) {
+            targetTab.classList.add('active');
+            console.log('[Collections Debug] Activated tab:', tabName);
+        } else {
+            console.error('[Collections Debug] Tab element not found for:', tabName);
+        }
+        
+        // Activate nav tab (only for movies and collections)
+        if (tabName === 'movies' || tabName === 'collections') {
+            var navTab = document.querySelector('.nav-tab[data-tab="' + tabName + '"]');
+            if (navTab) {
+                navTab.classList.add('active');
+            }
         }
         
         // Handle search box and view toggle visibility
