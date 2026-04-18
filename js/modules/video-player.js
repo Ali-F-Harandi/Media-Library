@@ -1,30 +1,129 @@
 /**
- * Movie Library - Video Player Module
+ * Movie Library - Professional Video Player Module (v2.0)
  * 
- * Handles video playback using HTML5 video player with advanced features including:
- * - Subtitle support (auto-detection from folder, multiple language support)
- * - Audio track switching for videos with multiple audio streams
- * - Full keyboard navigation and controls
- * - Toast notifications for user feedback
+ * Advanced HTML5 video player with professional features:
+ * - Multi-audio track support (switch between different languages/commentary tracks)
+ * - Multi-subtitle support (embedded + external SRT/VTT/ASS files)
+ * - Playback speed control (0.5x to 2x)
+ * - Picture-in-Picture (PiP) mode
+ * - Fullscreen support
+ * - Resume playback from last position
+ * - Real-time display with auto-hide controls
+ * - SRT to VTT conversion for browser compatibility
+ * - Language auto-detection from filenames
+ * - Keyboard shortcuts for quick access
+ * 
+ * Requirements: Chrome/Edge for File System Access API & audioTracks support
  * 
  * @module VideoPlayer
+ * @version 2.0
+ * @author Movie Library Team
  */
 
-// Current movie index being played (-1 when nothing is playing)
+// ============================================================================
+// STATE MANAGEMENT
+// ============================================================================
+
+/** Current movie index being played (-1 when nothing is playing) */
 var currentMovieIndex = -1;
 
-// Object URL for the currently loaded video file (for cleanup)
+/** Object URL for the currently loaded video file (for memory cleanup) */
 var currentVideoUrl = null;
 
-// Cache for loaded subtitle files to improve performance
+/** Array of external subtitle file handles found in movie folder */
+var externalSubtitleFiles = [];
+
+/** Auto-hide timer for control bar (prevents UI clutter during playback) */
+var controlBarInterval = null;
+
+/** Cache for converted subtitle data to avoid re-processing */
 var loadedSubtitleFiles = new Map();
+
+// ============================================================================
+// SUBTITLE UTILITIES
+// ============================================================================
+
+/**
+ * Convert SRT subtitle format to WebVTT format
+ * Browsers natively support VTT but not SRT, so conversion is needed
+ * Handles timestamp format conversion (comma to period) and adds WEBVTT header
+ * 
+ * @param {string} srtText - Raw SRT subtitle content
+ * @returns {string} Converted VTT subtitle content
+ * @example
+ * // Input: "1\n00:00:01,000 --> 00:00:04,000\nHello World"
+ * // Output: "WEBVTT\n\n1\n00:00:01.000 --> 00:00:04.000\nHello World"
+ */
+function convertSrtToVtt(srtText) {
+    return 'WEBVTT\n\n' + srtText
+        .replace(/\r\n/g, '\n')      // Normalize line endings (Windows -> Unix)
+        .replace(/\r/g, '\n')         // Normalize line endings (Mac -> Unix)
+        .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')  // Convert timestamps: comma -> period
+        .replace(/\n\n+/g, '\n\n')    // Normalize multiple blank lines to single
+        .trim();                      // Remove leading/trailing whitespace
+}
+
+/**
+ * Extract language name from subtitle filename
+ * Detects language codes (en, eng, es, spa, etc.) and returns human-readable name
+ * Supports ISO 639-1 (2-letter) and ISO 639-2 (3-letter) language codes
+ * 
+ * @param {string} filename - Subtitle filename (e.g., "movie.eng.srt")
+ * @returns {string} Human-readable language name (e.g., "English")
+ */
+function extractLanguageFromFilename(filename) {
+    const langPatterns = [
+        /\.([a-z]{2,3})\.(?:srt|vtt|ass|ssa|sub)$/i,  // Match: .en.srt, .eng.vtt
+        /\.([a-z]{2,3})$/i                              // Match: .en, .eng (at end)
+    ];
+    
+    for (const pattern of langPatterns) {
+        const match = filename.match(pattern);
+        if (match) {
+            const langCode = match[1].toLowerCase();
+            const langNames = {
+                'en': 'English', 'eng': 'English',
+                'es': 'Spanish', 'spa': 'Spanish',
+                'fr': 'French', 'fra': 'French',
+                'de': 'German', 'deu': 'German',
+                'it': 'Italian', 'ita': 'Italian',
+                'pt': 'Portuguese', 'por': 'Portuguese',
+                'ru': 'Russian', 'rus': 'Russian',
+                'ja': 'Japanese', 'jpn': 'Japanese',
+                'ko': 'Korean', 'kor': 'Korean',
+                'zh': 'Chinese', 'chi': 'Chinese',
+                'ar': 'Arabic', 'ara': 'Arabic',
+                'hi': 'Hindi', 'hin': 'Hindi',
+                'th': 'Thai', 'tha': 'Thai',
+                'vi': 'Vietnamese', 'vie': 'Vietnamese',
+                'pl': 'Polish', 'pol': 'Polish',
+                'nl': 'Dutch', 'dut': 'Dutch',
+                'sv': 'Swedish', 'swe': 'Swedish',
+                'no': 'Norwegian', 'nor': 'Norwegian',
+                'da': 'Danish', 'dan': 'Danish',
+                'fi': 'Finnish', 'fin': 'Finnish',
+                'tr': 'Turkish', 'tur': 'Turkish'
+            };
+            return langNames[langCode] || langCode.toUpperCase();
+        }
+    }
+    
+    // Fallback: use filename without extension
+    return filename.replace(/\.[^.]+$/, '');
+}
+
+// ============================================================================
+// CORE PLAYER FUNCTIONS
+// ============================================================================
 
 /**
  * Play a movie from the filtered movies list
  * Opens the video file using File System Access API and initializes the web player
+ * with all professional features (subtitles, audio tracks, resume position)
  * 
  * @param {number} idx - Index of the movie in window.filteredMovies array
  * @returns {Promise<void>}
+ * @throws {Error} If file handle is unavailable or video fails to load
  */
 async function playMovie(idx) {
     console.log('[VideoPlayer Debug] playMovie called with index:', idx);

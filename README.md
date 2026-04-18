@@ -47,8 +47,17 @@ A modern web-based movie collection manager built with vanilla JavaScript and CS
   - File size and filename details
   - IMDb and TMDb links
 
-- **▶️ Built-in Video Player**
-  - Play movies directly in the browser
+- **▶️ Professional Video Player**
+  - Play movies directly in the browser with HTML5 video player
+  - **Multi-Audio Support**: Switch between different audio tracks (languages, commentary)
+  - **Multi-Subtitle Support**: Auto-detect external subtitles (.srt, .vtt) from movie folder
+  - **25+ Languages**: Automatic language detection from subtitle filenames
+  - **SRT to VTT Conversion**: Client-side conversion for browser compatibility
+  - **Playback Speed Control**: Adjust speed from 0.5x to 2x
+  - **Picture-in-Picture (PiP)**: Watch while browsing other apps
+  - **Fullscreen Mode**: Immersive viewing experience
+  - **Resume Playback**: Automatically resume from where you left off
+  - **Real-time Display**: Current time and duration display
   - Navigate between movies with prev/next controls
   - Keyboard shortcuts (Arrow keys, Escape)
 
@@ -138,6 +147,66 @@ When viewing movies:
 - **Arrow Left**: Previous movie (in player)
 - **Arrow Right**: Next movie (in player)
 
+## 🎮 Video Player Controls
+
+The professional video player includes these controls:
+
+### Playback Controls
+- **Speed Button (1x)**: Cycle through playback speeds (0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x)
+- **PiP Button (📺)**: Enable Picture-in-Picture mode to watch while multitasking
+- **Fullscreen Button (⛶)**: Toggle fullscreen mode for immersive viewing
+- **Time Display**: Shows current position and total duration (MM:SS / MM:SS)
+
+### Audio Menu (🔊 Audio)
+- Appears automatically when video has multiple audio tracks
+- Click to open dropdown menu
+- Select desired audio track (language, commentary, etc.)
+- Active track highlighted in accent color
+
+### Subtitle Menu (📝 Subtitles)
+- Auto-detects external subtitle files (.srt, .vtt) in movie folder
+- "Off" option to disable subtitles
+- Lists all detected subtitles with language names
+- Supports 25+ languages with automatic detection from filenames
+- Example filename patterns: `movie.en.srt`, `movie.eng.vtt`, `movie.spanish.srt`
+
+### Supported Subtitle Languages
+English, Spanish, French, German, Italian, Portuguese, Russian, Japanese, Korean, Chinese, Arabic, Hindi, Thai, Vietnamese, Polish, Dutch, Swedish, Norwegian, Danish, Finnish, Turkish, Czech, Hungarian, Romanian, Ukrainian, Greek, Hebrew, Indonesian, Malay
+
+### Resume Feature
+- Automatically saves your position when you pause or close the player
+- Resumes from where you left off when you play the movie again
+- Position stored in browser's localStorage
+- Clears saved position when video completes
+
+## 💡 Usage Examples
+
+### Playing a Movie with Multiple Audio Tracks
+1. Click the play button on any movie
+2. If the video has multiple audio tracks, the "🔊 Audio" button appears
+3. Click the button to see available tracks (e.g., "English", "Spanish", "Director Commentary")
+4. Select your preferred audio track
+
+### Loading External Subtitles
+1. Place subtitle files in the same folder as your movie
+2. Name them appropriately: `Movie Name (Year).en.srt` or `Movie Name (Year).spanish.vtt`
+3. Play the movie in the browser
+4. Click "📝 Subtitles" button
+5. Select your desired subtitle language
+6. Use "Off" to disable subtitles
+
+### Using Picture-in-Picture Mode
+1. Play a movie
+2. Click the "📺" button
+3. Video pops out into a floating window
+4. Browse other apps or websites while watching
+5. Click the PiP window to return to full player
+
+### Changing Playback Speed
+1. Click the "1x" button repeatedly to cycle through speeds
+2. Speeds available: 0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x
+3. Useful for slow-motion analysis or fast-forwarding content
+
 ## 📁 Project Structure
 
 ```
@@ -161,7 +230,18 @@ movie-library/
 
 - **`scanner.js`**: Scans selected folders for movies using File System Access API. Detects video files, posters, fanart, logos, and NFO metadata files. Builds full file paths by traversing directory trees.
 
-- **`video-player.js`**: Handles video playback in the browser with advanced features including subtitle support (auto-detection from folder), audio track switching, and keyboard navigation.
+- **`video-player.js`**: Professional HTML5 video player module (v2.0) with advanced features:
+  - Multi-audio track detection and switching (for videos with multiple languages/commentary)
+  - External subtitle scanning and loading (.srt, .vtt formats)
+  - SRT to VTT conversion for browser compatibility
+  - Language auto-detection from filenames (25+ languages supported)
+  - Playback speed control (0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x)
+  - Picture-in-Picture (PiP) mode support
+  - Fullscreen toggle functionality
+  - Resume playback from saved position (stored in localStorage)
+  - Real-time timecode display
+  - Clean dropdown UI for audio/subtitle selection
+  - Memory management with proper URL cleanup
 
 - **`detail-page.js`**: Displays comprehensive movie information including poster, fanart background, metadata (director, cast, genres), technical specs, and provides actions like play and copy path.
 
