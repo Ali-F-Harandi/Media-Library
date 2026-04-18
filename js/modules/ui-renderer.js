@@ -1,5 +1,8 @@
-// Movie Library - UI Renderer Module
-// Handles rendering movies and UI updates
+/**
+ * Movie Library - UI Renderer Module
+ * Handles rendering movies in different view modes (grid, detail, list)
+ * Manages poster/logo loading and display state
+ */
 
 var currentView = localStorage.getItem('movieLibView') || 'grid';
 
@@ -59,6 +62,10 @@ function filterMovies() {
     renderMovies();
 }
 
+/**
+ * Load poster and logo images asynchronously
+ * Shows/hides placeholder icons based on image availability
+ */
 async function loadAssets() {
     var posters = document.querySelectorAll('.poster-img[data-idx]');
     var logos = document.querySelectorAll('.logo-img[data-idx]');
@@ -73,6 +80,9 @@ async function loadAssets() {
                 if (m.posterUrl) {
                     img.src = m.posterUrl;
                     img.classList.add('loaded');
+                    // Hide placeholder when poster loads
+                    var placeholder = img.parentElement.querySelector('.no-poster-placeholder');
+                    if (placeholder) placeholder.style.display = 'none';
                     return;
                 }
                 try {
@@ -80,6 +90,9 @@ async function loadAssets() {
                     m.posterUrl = URL.createObjectURL(f);
                     img.src = m.posterUrl;
                     img.classList.add('loaded');
+                    // Hide placeholder when poster loads
+                    var placeholder = img.parentElement.querySelector('.no-poster-placeholder');
+                    if (placeholder) placeholder.style.display = 'none';
                 } catch(e) {}
             })());
         })(posters[i]);
@@ -142,11 +155,13 @@ function renderMovies() {
     if (currentView === 'grid') {
         h = '<div class="movie-grid">' + window.filteredMovies.map(function(m, i) {
             var r = m.nfoData && m.nfoData.rating;
+            var hasPoster = !!m.posterHandle;
             return '<div class="movie-card" onclick="showDetailPage(' + i + ')">' +
                 '<div class="poster-container">' +
                     (m.logoHandle ? '<img class="logo-img" data-idx="' + i + '">' : '') +
                     '<img class="poster-img" data-idx="' + i + '">' +
-                    '<div class="no-poster-placeholder">' +
+                    // Always show placeholder icon, hidden when poster loads
+                    '<div class="no-poster-placeholder"' + (hasPoster ? ' style="display:none"' : '') + '>' +
                         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
                             '<rect x="3" y="3" width="18" height="18" rx="2"/>' +
                             '<circle cx="8.5" cy="8.5" r="1.5"/>' +

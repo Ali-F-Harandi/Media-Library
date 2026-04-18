@@ -243,7 +243,7 @@ movie-library/
   - Clean dropdown UI for audio/subtitle selection
   - Memory management with proper URL cleanup
 
-- **`detail-page.js`**: Displays comprehensive movie information including poster, fanart background, metadata (director, cast, genres), technical specs, and provides actions like play and copy path.
+- **`detail-page.js`**: Displays comprehensive movie information including poster, fanart background, metadata (director, cast, genres), technical specs, and provides actions like play and copy path. Features local actor image loading from `.actors` subfolders with fallback to web images.
 
 - **`nfo-parser.js`**: Parses Kodi-compatible NFO XML files to extract movie metadata including plot, rating, cast, technical specifications, and external database IDs (IMDb, TMDb).
 
@@ -252,6 +252,32 @@ movie-library/
 - **`utils.js`**: Provides utility functions used throughout the application including HTML escaping, file size formatting, toast notifications, and more.
 
 - **`app.js`**: Main application controller that coordinates all modules, handles user interactions, manages state, and initializes the application.
+
+## 🎯 New Features (Latest Update)
+
+### 📁 Local Actor Images
+- Automatically scans for `.actors` subfolder in movie directories
+- Loads actor photos from local JPG/PNG files (e.g., `Paul_Walker.jpg`, `Ludacris.jpg`)
+- Supports multiple name formats: "Paul_Walker", "PaulWalker", "Walker"
+- Falls back to web images from NFO if local images not found
+- Larger circular actor avatars (160px) with enhanced styling
+
+### 📋 Absolute Path Copying
+- "Copy Path" button now copies full absolute paths (e.g., `D:/Movies/Movie Name (2012)`)
+- Builds complete directory tree by traversing parent folders
+- Previously only copied relative paths
+
+### 🖼️ Poster Placeholder Management
+- Placeholder icon always present in DOM for consistent layout
+- Automatically hidden when poster image loads successfully
+- Remains visible for movies without posters
+- Improved z-index layering for better visual hierarchy
+
+### 🎨 Enhanced Display Modes
+All three view modes fully functional and accessible via toggle buttons:
+- **Grid View** (default): Classic poster grid with hover effects
+- **Detail View**: Expanded cards with ratings, tags, and extended info
+- **List View**: Compact horizontal list for quick scanning
 
 ## 💡 How It Works
 
@@ -274,7 +300,8 @@ The Movie Library application uses modern web technologies:
 - **Browser Security**: The File System Access API requires user permission for each folder
 - **Session Persistence**: Folder handles are saved, but permissions may need re-granting
 - **Local Files Only**: Videos are played from your local drive, not streamed
-- **Drive Letters**: Browser security hides actual drive letters in copied paths
+- **Full Path Support**: Copy Path now includes full absolute paths with drive letters (e.g., `D:/Movies/...`)
+- **Actor Images**: Place actor photos in a `.actors` subfolder within each movie directory for automatic detection
 
 ## 🤝 Contributing
 

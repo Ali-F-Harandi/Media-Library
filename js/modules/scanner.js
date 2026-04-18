@@ -139,6 +139,32 @@ async function processMovieFolder(fh, rootName) {
     // Store root name for reference (used as fallback for fullPath)
     var libraryRoot = rootName;
     
+    // Scan for .actors subfolder and collect actor image handles
+    var actorsFolderHandle = null;
+    var actorImages = {};
+    try {
+        for await (var entry of fh.values()) {
+            if (entry.kind === 'directory' && entry.name.toLowerCase() === '.actors') {
+                actorsFolderHandle = entry;
+                // Scan all jpg/png files in .actors folder
+                for await (var actorFile of entry.values()) {
+                    if (actorFile.kind === 'file') {
+                        var actorName = actorFile.name.toLowerCase();
+                        if (actorName.endsWith('.jpg') || actorName.endsWith('.jpeg') || 
+                            actorName.endsWith('.png') || actorName.endsWith('.webp')) {
+                            // Extract actor name from filename (e.g., "Paul_Walker.jpg" -> "Paul_Walker")
+                            var nameKey = actorFile.name.replace(/\.(jpg|jpeg|png|webp)$/i, '');
+                            actorImages[nameKey.toLowerCase()] = actorFile;
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    } catch(e) {
+        console.log('[Scanner Debug] Could not scan .actors folder:', e);
+    }
+    
     // Return complete movie object with all metadata
     return {
         movie: {
@@ -157,7 +183,9 @@ async function processMovieFolder(fh, rootName) {
             posterUrl: null,
             logoUrl: null,
             fanartUrl: null,
-            nfoData: nfoData
+            nfoData: nfoData,
+            actorsFolderHandle: actorsFolderHandle,
+            actorImages: actorImages  // Map of actor name -> file handle
         }
     };
 }

@@ -1,5 +1,7 @@
-// Movie Library - Detail Page Module
-// Handles the movie detail page display and interactions
+/**
+ * Movie Library - Detail Page Module
+ * Handles the movie detail page display and interactions
+ */
 
 async function showDetailPage(idx) {
     var m = window.filteredMovies[idx];
@@ -240,20 +242,58 @@ async function showDetailPage(idx) {
     if (nfo.actors && nfo.actors.length) {
         html += '<div class="detail-section">' +
             '<div class="detail-section-title">Cast</div>' +
-            '<div class="detail-cast-scroll">' +
-                nfo.actors.map(function(a) {
-                    return '<div class="detail-cast-card">' +
-                        '<div class="detail-cast-avatar">' +
-                            (a.thumb ?
-                                '<img src="' + window.Utils.escHtml(a.thumb) + '" onerror="this.parentElement.innerHTML=\'&#127917;\'">' :
-                                '&#127917;') +
-                        '</div>' +
-                        '<div class="detail-cast-name">' + window.Utils.escHtml(a.name) + '</div>' +
-                        '<div class="detail-cast-role">' + window.Utils.escHtml(a.role) + '</div>' +
-                    '</div>';
-                }).join('') +
-            '</div>' +
-        '</div>';
+            '<div class="detail-cast-scroll">';
+        
+        // Process each actor to check for local images first
+        for (var ai = 0; ai < nfo.actors.length; ai++) {
+            var a = nfo.actors[ai];
+            var actorImgHtml = '&#127917;'; // Default emoji fallback
+            var hasLocalImage = false;
+            
+            // Check if we have local actor images from .actors folder
+            if (m.actorImages) {
+                // Try different name formats: "Paul_Walker", "Paul Walker", "walker", etc.
+                var nameVariants = [
+                    a.name.replace(/\s+/g, '_'),  // "Paul Walker" -> "Paul_Walker"
+                    a.name.replace(/\s+/g, ''),   // "Paul Walker" -> "PaulWalker"
+                    a.name.split(' ').pop(),      // "Paul Walker" -> "Walker"
+                    a.name.toLowerCase()          // lowercase full name
+                ];
+                
+                for (var vi = 0; vi < nameVariants.length; vi++) {
+                    var variant = nameVariants[vi].toLowerCase();
+                    if (m.actorImages[variant]) {
+                        // Found local image, create object URL
+                        try {
+                            if (!a.localActorUrl) {
+                                var localFile = await m.actorImages[variant].getFile();
+                                a.localActorUrl = URL.createObjectURL(localFile);
+                            }
+                            actorImgHtml = '<img src="' + a.localActorUrl + '" onerror="this.onerror=null;this.src=\'data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1.5\\'><circle cx=\\'12\\' cy=\\'8\\' r=\\'4\\'/><path d=\\'M6 20v-2a6 6 0 0 1 12 0v2\\'/></svg>\';">';
+                            hasLocalImage = true;
+                            break;
+                        } catch(e) {
+                            console.warn('[DetailPage] Failed to load local actor image:', e);
+                        }
+                    }
+                }
+            }
+            
+            // If no local image, use web image from NFO
+            if (!hasLocalImage && a.thumb) {
+                actorImgHtml = '<img src="' + window.Utils.escHtml(a.thumb) + '" onerror="this.onerror=null;this.src=\'data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1.5\\'><circle cx=\\'12\\' cy=\\'8\\' r=\\'4\\'/><path d=\\'M6 20v-2a6 6 0 0 1 12 0v2\\'/></svg>\';">';
+            }
+            
+            html += '<div class="detail-cast-card">' +
+                '<div class="detail-cast-avatar">' +
+                    actorImgHtml +
+                '</div>' +
+                '<div class="detail-cast-name">' + window.Utils.escHtml(a.name) + '</div>' +
+                '<div class="detail-cast-role">' + window.Utils.escHtml(a.role) + '</div>' +
+            '</div>';
+        }
+        
+        html += '</div></div>';
     }
 
     body.innerHTML = html;

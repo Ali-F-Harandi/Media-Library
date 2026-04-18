@@ -12,8 +12,6 @@ target/
 .venv/
 venv/
 node_modules/
-.julia/
-zig*/
 .mypy_cache/
 .pytest_cache/
 .gradle/
@@ -23,7 +21,6 @@ zig*/
 *.tmp
 *.swp
 *.swo
-*.out
 
 # Environment
 .env
@@ -36,11 +33,11 @@ zig*/
 *.swp
 *.swo
 
-# OS generated files
+# System files
 .DS_Store
 Thumbs.db
 
-# Coverage reports
+# Coverage
 coverage/
 htmlcov/
 .coverage
