@@ -18,10 +18,10 @@ function updateStats() {
     var movieCount = window.allMovies.filter(function(m) { return !m.isTVShow; }).length;
     var tvShowCount = window.allMovies.filter(function(m) { return m.isTVShow; }).length;
     document.getElementById('headerStats').textContent =
-        window.allMovies.length + ' titles (' + movieCount + ' movies' + (tvShowCount > 0 ? ', ' + tvShowCount + ' TV shows' : '') + ') • ' + window.Utils.formatBytes(ts) + ' total';
+        window.allMovies.length + ' titles (' + movieCount + ' movies' + (tvShowCount > 0 ? ', ' + tvShowCount + ' TV shows' : '') + ') \u2022 ' + window.Utils.formatBytes(ts) + ' total';
     document.getElementById('skippedCount').textContent = window.skippedFolders.length;
     document.getElementById('skippedList').innerHTML = window.skippedFolders.map(function(s) {
-        return '<li><strong>' + window.Utils.escHtml(s.name) + '</strong> — ' + window.Utils.escHtml(s.reason) + '</li>';
+        return '<li><strong>' + window.Utils.escHtml(s.name) + '</strong> \u2014 ' + window.Utils.escHtml(s.reason) + '</li>';
     }).join('');
 }
 
@@ -62,6 +62,178 @@ function filterMovies() {
     });
 
     renderMovies();
+    // Also render TV shows tab if visible
+    renderTVShows();
+}
+
+// ============================================================================
+// TV SHOW FILTERING & RENDERING
+// ============================================================================
+
+/**
+ * Filter and render TV shows separately for the TV Shows tab
+ */
+window.filterTVShows = function() {
+    renderTVShows();
+};
+
+/**
+ * Render TV shows in their dedicated tab
+ * Shows a grid of TV show cards with season/episode info
+ */
+function renderTVShows() {
+    var container = document.getElementById('tvshowContainer');
+    var emptyState = document.getElementById('tvshowEmptyState');
+    var filterCount = document.getElementById('tvFilterCount');
+    
+    if (!container) return;
+    
+    var tvShows = window.allMovies.filter(function(m) { return m.isTVShow; });
+    
+    // Sort TV shows
+    var sortSelect = document.getElementById('tvSortSelect');
+    var s = sortSelect ? sortSelect.value : 'name-asc';
+    
+    tvShows.sort(function(a, b) {
+        if (s === 'name-asc') return a.title.localeCompare(b.title);
+        if (s === 'name-desc') return b.title.localeCompare(a.title);
+        if (s === 'year-asc') return parseInt(a.year) - parseInt(b.year);
+        if (s === 'year-desc') return parseInt(b.year) - parseInt(a.year);
+        if (s === 'rating-desc') {
+            var ra = (a.nfoData && a.nfoData.rating) || 0;
+            var rb = (b.nfoData && b.nfoData.rating) || 0;
+            return rb - ra;
+        }
+        if (s === 'size-desc') return b.fileSize - a.fileSize;
+        return 0;
+    });
+    
+    if (filterCount) {
+        filterCount.textContent = tvShows.length + ' TV show' + (tvShows.length !== 1 ? 's' : '');
+    }
+    
+    if (tvShows.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'flex';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    
+    var html = '<div class="movie-grid tvshow-grid">';
+    
+    tvShows.forEach(function(m) {
+        // Find the real index in allMovies for detail page navigation
+        var realIdx = window.allMovies.indexOf(m);
+        var r = m.nfoData && m.nfoData.rating;
+        var hasPoster = !!m.posterHandle;
+        
+        // Build season info text
+        var seasonInfo = m.totalSeasons + ' Season' + (m.totalSeasons > 1 ? 's' : '') + ' \u2022 ' + m.totalEpisodes + ' Episode' + (m.totalEpisodes > 1 ? 's' : '');
+        
+        html += '<div class="movie-card tvshow-card" onclick="showTVShowFromTab(' + realIdx + ')">' +
+            '<div class="poster-container">' +
+                (m.logoHandle ? '<img class="logo-img" data-tv-idx="' + realIdx + '">' : '') +
+                '<img class="poster-img" data-tv-idx="' + realIdx + '">' +
+                '<div class="no-poster-placeholder"' + (hasPoster ? ' style="display:none"' : '') + '>' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
+                        '<rect x="2" y="7" width="20" height="15" rx="2"/>' +
+                        '<polyline points="17 2 12 7 7 2"/>' +
+                    '</svg>' +
+                '</div>' +
+                '<div class="card-overlay">' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                        '<circle cx="12" cy="12" r="10"/>' +
+                        '<polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none"/>' +
+                    '</svg>' +
+                '</div>' +
+                (m.hasNfo ? '<span class="nfo-badge">NFO</span>' : '') +
+                (r ? '<div class="rating-badge">' +
+                    '<svg width="12" height="12" viewBox="0 0 24 24" fill="var(--star-color)">' +
+                        '<polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>' +
+                    '</svg>' + r.toFixed(1) +
+                '</div>' : '') +
+                '<span class="movie-quality tv-badge">TV Series</span>' +
+            '</div>' +
+            '<div class="card-info">' +
+                '<div class="movie-title">' + window.Utils.escHtml(m.title) + '</div>' +
+                '<div class="movie-year">' + m.year + ' \u2022 ' + seasonInfo + '</div>' +
+                (m.nfoData && m.nfoData.genres && m.nfoData.genres.length ?
+                    '<div class="movie-genre">' + m.nfoData.genres.map(window.Utils.escHtml).join(', ') + '</div>' : '') +
+                '<div class="movie-filesize">' + window.Utils.formatBytes(m.fileSize) + '</div>' +
+            '</div>' +
+        '</div>';
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+    
+    // Load TV show posters
+    loadTVShowAssets(tvShows);
+}
+
+/**
+ * Show TV show detail from the TV Shows tab
+ */
+window.showTVShowFromTab = function(realIdx) {
+    // Set filteredMovies to allMovies so detail page can find the show
+    window.filteredMovies = window.allMovies;
+    window.DetailPage.showDetailPage(realIdx);
+};
+
+/**
+ * Load poster images for TV show cards
+ */
+async function loadTVShowAssets(tvShows) {
+    var posters = document.querySelectorAll('.poster-img[data-tv-idx]');
+    
+    for (var i = 0; i < posters.length; i++) {
+        (function(img) {
+            (async function() {
+                var idx = parseInt(img.dataset.tvIdx);
+                var m = window.allMovies[idx];
+                if (!m || !m.posterHandle) return;
+                if (m.posterUrl) {
+                    img.src = m.posterUrl;
+                    img.classList.add('loaded');
+                    var placeholder = img.parentElement.querySelector('.no-poster-placeholder');
+                    if (placeholder) placeholder.style.display = 'none';
+                    return;
+                }
+                try {
+                    var f = await m.posterHandle.getFile();
+                    m.posterUrl = URL.createObjectURL(f);
+                    img.src = m.posterUrl;
+                    img.classList.add('loaded');
+                    var placeholder = img.parentElement.querySelector('.no-poster-placeholder');
+                    if (placeholder) placeholder.style.display = 'none';
+                } catch(e) {}
+            })();
+        })(posters[i]);
+    }
+    
+    // Load logos
+    var logos = document.querySelectorAll('.logo-img[data-tv-idx]');
+    for (var j = 0; j < logos.length; j++) {
+        (function(img) {
+            (async function() {
+                var idx = parseInt(img.dataset.tvIdx);
+                var m = window.allMovies[idx];
+                if (!m || !m.logoHandle) return;
+                if (m.logoUrl) {
+                    img.src = m.logoUrl;
+                    img.classList.add('loaded');
+                    return;
+                }
+                try {
+                    var f = await m.logoHandle.getFile();
+                    m.logoUrl = URL.createObjectURL(f);
+                    img.src = m.logoUrl;
+                    img.classList.add('loaded');
+                } catch(e) {}
+            })();
+        })(logos[j]);
+    }
 }
 
 /**
@@ -159,7 +331,7 @@ function renderMovies() {
             var r = m.nfoData && m.nfoData.rating;
             var hasPoster = !!m.posterHandle;
             var isTV = m.isTVShow;
-            var episodesInfo = isTV ? (m.totalEpisodes + ' eps' + (m.totalSeasons ? ' • ' + m.totalSeasons + ' seasons' : '')) : '';
+            var episodesInfo = isTV ? (m.totalEpisodes + ' eps' + (m.totalSeasons ? ' \\u2022 ' + m.totalSeasons + ' seasons' : '')) : '';
             return '<div class="movie-card" onclick="showDetailPage(' + i + ')">' +
                 '<div class="poster-container">' +
                     (m.logoHandle ? '<img class="logo-img" data-idx="' + i + '">' : '') +
@@ -190,8 +362,8 @@ function renderMovies() {
                 '<div class="card-info">' +
                     '<div class="movie-title">' + window.Utils.escHtml(m.title) + '</div>' +
                     '<div class="movie-year">' + m.year +
-                        (episodesInfo ? ' • ' + episodesInfo : 
-                         (m.nfoData && m.nfoData.runtime ? ' • ' + m.nfoData.runtime + 'm' : '')) +
+                        (episodesInfo ? ' \\u2022 ' + episodesInfo : 
+                         (m.nfoData && m.nfoData.runtime ? ' \\u2022 ' + m.nfoData.runtime + 'm' : '')) +
                     '</div>' +
                     (m.nfoData && m.nfoData.genres && m.nfoData.genres.length ?
                         '<div class="movie-genre">' + m.nfoData.genres.map(window.Utils.escHtml).join(', ') + '</div>' : '') +
@@ -208,7 +380,7 @@ function renderMovies() {
                 '<div class="detail-info">' +
                     '<div class="detail-title">' + window.Utils.escHtml(m.title) + '</div>' +
                     '<div style="color:var(--text-secondary);margin-bottom:.3rem">' + m.year +
-                        (m.nfoData && m.nfoData.runtime ? ' • ' + m.nfoData.runtime + ' min' : '') +
+                        (m.nfoData && m.nfoData.runtime ? ' \u2022 ' + m.nfoData.runtime + ' min' : '') +
                     '</div>' +
                     (m.nfoData && m.nfoData.rating ?
                         '<div style="display:flex;align-items:center;gap:.3rem;margin-bottom:.5rem;color:var(--star-color)">' +
@@ -264,8 +436,9 @@ function renderMovies() {
 }
 
 // Export for use in other modules
-window.UIRenderer = { updateStats, toggleSkippedPanel, filterMovies, loadAssets, setView, renderMovies };
+window.UIRenderer = { updateStats, toggleSkippedPanel, filterMovies, loadAssets, setView, renderMovies, renderTVShows, filterTVShows };
 
 // Also expose as global functions for inline HTML handlers
 window.filterMovies = filterMovies;
 window.setView = setView;
+window.filterTVShows = filterTVShows;
