@@ -3,7 +3,8 @@
  * Handles the movie detail page display and interactions
  */
 
-async function showDetailPage(idx) {
+// Define function using var to ensure it's available before assignment
+var showDetailPage = async function(idx) {
     var m = window.filteredMovies[idx];
     if (!m) return;
 
@@ -305,9 +306,9 @@ async function showDetailPage(idx) {
     });
 }
 
-function closeDetailPage() {
+var closeDetailPage = function() {
     document.getElementById('detailPage').classList.remove('active');
-}
+};
 
 async function copyMoviePath(idx) {
     var m = window.filteredMovies[idx];
