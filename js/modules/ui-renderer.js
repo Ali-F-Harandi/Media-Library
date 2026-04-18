@@ -187,7 +187,6 @@ function renderMovies() {
                     '<div class="movie-year">' + m.year +
                         (m.nfoData && m.nfoData.runtime ? ' \u2022 ' + m.nfoData.runtime + 'm' : '') +
                     '</div>' +
-                    (m.quality ? '<span class="movie-quality">' + window.Utils.escHtml(m.quality) + '</span>' : '') +
                     (m.nfoData && m.nfoData.genres && m.nfoData.genres.length ?
                         '<div class="movie-genre">' + m.nfoData.genres.map(window.Utils.escHtml).join(', ') + '</div>' : '') +
                     '<div class="movie-filesize">' + window.Utils.formatBytes(m.fileSize) + '</div>' +
