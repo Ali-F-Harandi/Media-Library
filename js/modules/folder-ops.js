@@ -95,7 +95,18 @@ function closeManageFolders() {
     }, 300);
 }
 
+/**
+ * Remove a folder from the library by index
+ * @param {number} index - Index of folder in folderHandles array
+ */
 async function removeFolder(index) {
+    // Validate input parameter
+    if (typeof index !== 'number' || index < 0) {
+        console.error('Invalid folder index:', index);
+        window.Utils.showToast('Invalid folder index', 'warning');
+        return;
+    }
+    
     try {
         var handles = await window.DBUtils.getSetting('folderHandles') || [];
         if (index >= 0 && index < handles.length) {

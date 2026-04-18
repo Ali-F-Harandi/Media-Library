@@ -133,6 +133,7 @@
             if (!movie.posterUrl && movie.posterHandle) {
                 try {
                     var file = await movie.posterHandle.getFile();
+                    if (movie.posterUrl) URL.revokeObjectURL(movie.posterUrl);
                     movie.posterUrl = URL.createObjectURL(file);
                     img.src = movie.posterUrl;
                     img.classList.add('loaded');

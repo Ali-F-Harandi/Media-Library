@@ -36,20 +36,22 @@ async function showMovieDetailPage(idx) {
     var m = window.filteredMovies[idx];
     if (!m) return;
 
-    // Load poster
+    // Load poster - revoke old URL before creating new one to prevent memory leaks
     if (!m.posterUrl && m.posterHandle) {
         try {
             var f = await m.posterHandle.getFile();
+            if (m.posterUrl) URL.revokeObjectURL(m.posterUrl);
             m.posterUrl = URL.createObjectURL(f);
         } catch(e) {}
     }
 
-    // Load fanart
+    // Load fanart - revoke old URL before creating new one to prevent memory leaks
     var fanartSrc = '';
     if (m.fanartHandle) {
         if (!m.fanartUrl) {
             try {
                 var ff = await m.fanartHandle.getFile();
+                if (m.fanartUrl) URL.revokeObjectURL(m.fanartUrl);
                 m.fanartUrl = URL.createObjectURL(ff);
             } catch(e) {}
         }
@@ -167,20 +169,22 @@ async function showTVShowDetailPage(idx) {
     currentTVShowIdx = idx;
     currentSeasonIndex = 0; // Reset to first season
 
-    // Load poster
+    // Load poster - revoke old URL before creating new one to prevent memory leaks
     if (!m.posterUrl && m.posterHandle) {
         try {
             var f = await m.posterHandle.getFile();
+            if (m.posterUrl) URL.revokeObjectURL(m.posterUrl);
             m.posterUrl = URL.createObjectURL(f);
         } catch(e) {}
     }
 
-    // Load fanart
+    // Load fanart - revoke old URL before creating new one to prevent memory leaks
     var fanartSrc = '';
     if (m.fanartHandle) {
         if (!m.fanartUrl) {
             try {
                 var ff = await m.fanartHandle.getFile();
+                if (m.fanartUrl) URL.revokeObjectURL(m.fanartUrl);
                 m.fanartUrl = URL.createObjectURL(ff);
             } catch(e) {}
         }

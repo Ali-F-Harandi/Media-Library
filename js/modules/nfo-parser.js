@@ -1,6 +1,11 @@
 // Movie Library - NFO Parser Module
 // Parses XML NFO files for movie and TV show metadata
 
+/**
+ * Parse XML NFO files for movie and TV show metadata
+ * @param {string} xmlText - Raw XML content from NFO file
+ * @returns {Object} Parsed metadata object
+ */
 function parseNFO(xmlText) {
     var res = {
         rating: null, ratingVotes: null, plot: null, runtime: null,
@@ -91,21 +96,33 @@ function parseNFO(xmlText) {
             }
         }
         
-        // Parse rating
+        // Parse rating with proper null checks
         var defaultR = rootEl.querySelector('rating[default="true"]');
         if (defaultR) {
             var vEl = defaultR.querySelector('value');
             var vtEl = defaultR.querySelector('votes');
-            if (vEl) res.rating = parseFloat(vEl.textContent);
-            if (vtEl) res.ratingVotes = parseInt(vtEl.textContent);
+            if (vEl && vEl.textContent) {
+                var ratingVal = parseFloat(vEl.textContent);
+                if (!isNaN(ratingVal)) res.rating = ratingVal;
+            }
+            if (vtEl && vtEl.textContent) {
+                var votesVal = parseInt(vtEl.textContent);
+                if (!isNaN(votesVal)) res.ratingVotes = votesVal;
+            }
         }
         if (res.rating === null) {
             var anyR = rootEl.querySelector('rating');
             if (anyR) {
                 var v2 = anyR.querySelector('value');
                 var vt2 = anyR.querySelector('votes');
-                if (v2) res.rating = parseFloat(v2.textContent);
-                if (vt2) res.ratingVotes = parseInt(vt2.textContent);
+                if (v2 && v2.textContent) {
+                    var ratingVal2 = parseFloat(v2.textContent);
+                    if (!isNaN(ratingVal2)) res.rating = ratingVal2;
+                }
+                if (vt2 && vt2.textContent) {
+                    var votesVal2 = parseInt(vt2.textContent);
+                    if (!isNaN(votesVal2)) res.ratingVotes = votesVal2;
+                }
             }
         }
         

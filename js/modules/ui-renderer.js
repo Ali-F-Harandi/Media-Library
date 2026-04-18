@@ -202,6 +202,7 @@ async function loadTVShowAssets(tvShows) {
                 }
                 try {
                     var f = await m.posterHandle.getFile();
+                    if (m.posterUrl) URL.revokeObjectURL(m.posterUrl);
                     m.posterUrl = URL.createObjectURL(f);
                     img.src = m.posterUrl;
                     img.classList.add('loaded');
@@ -227,6 +228,7 @@ async function loadTVShowAssets(tvShows) {
                 }
                 try {
                     var f = await m.logoHandle.getFile();
+                    if (m.logoUrl) URL.revokeObjectURL(m.logoUrl);
                     m.logoUrl = URL.createObjectURL(f);
                     img.src = m.logoUrl;
                     img.classList.add('loaded');
@@ -261,6 +263,7 @@ async function loadAssets() {
                 }
                 try {
                     var f = await m.posterHandle.getFile();
+                    if (m.posterUrl) URL.revokeObjectURL(m.posterUrl);
                     m.posterUrl = URL.createObjectURL(f);
                     img.src = m.posterUrl;
                     img.classList.add('loaded');
@@ -285,6 +288,7 @@ async function loadAssets() {
                 }
                 try {
                     var f = await m.logoHandle.getFile();
+                    if (m.logoUrl) URL.revokeObjectURL(m.logoUrl);
                     m.logoUrl = URL.createObjectURL(f);
                     img.src = m.logoUrl;
                     img.classList.add('loaded');
@@ -310,24 +314,27 @@ function setView(view) {
     renderMovies();
 }
 
+/**
+ * Render movies based on current view mode (grid, detail, list)
+ */
 function renderMovies() {
-    var c = document.getElementById('movieContainer');
-    var e = document.getElementById('emptyState');
+    var container = document.getElementById('movieContainer');
+    var emptyState = document.getElementById('emptyState');
 
     document.getElementById('filterCount').textContent =
         'Showing ' + window.filteredMovies.length + ' of ' + window.allMovies.length;
 
     if (window.filteredMovies.length === 0) {
-        c.innerHTML = '';
-        e.style.display = 'flex';
+        container.innerHTML = '';
+        emptyState.style.display = 'flex';
         return;
     }
 
-    e.style.display = 'none';
-    var h = '';
+    emptyState.style.display = 'none';
+    var html = '';
 
     if (currentView === 'grid') {
-        h = '<div class="movie-grid">' + window.filteredMovies.map(function(m, i) {
+        html = '<div class="movie-grid">' + window.filteredMovies.map(function(m, i) {
             var r = m.nfoData && m.nfoData.rating;
             var hasPoster = !!m.posterHandle;
             var isTV = m.isTVShow;
@@ -372,7 +379,7 @@ function renderMovies() {
             '</div>';
         }).join('') + '</div>';
     } else if (currentView === 'detail') {
-        h = '<div class="movie-detail-grid">' + window.filteredMovies.map(function(m, i) {
+        html = '<div class="movie-detail-grid">' + window.filteredMovies.map(function(m, i) {
             return '<div class="movie-detail-card" onclick="showDetailPage(' + i + ')">' +
                 '<div class="detail-poster">' +
                     '<img class="poster-img" data-idx="' + i + '">' +
@@ -408,7 +415,7 @@ function renderMovies() {
         }).join('') + '</div>';
     } else if (currentView === VIEW_MODES.LIST) {
         // List view: compact horizontal list with essential info
-        h = '<div class="movie-list">' + window.filteredMovies.map(function(m, i) {
+        html = '<div class="movie-list">' + window.filteredMovies.map(function(m, i) {
             return '<div class="movie-list-item" onclick="showDetailPage(' + i + ')">' +
                 '<div class="list-poster">' +
                     '<img class="poster-img" data-idx="' + i + '">' +
@@ -431,7 +438,7 @@ function renderMovies() {
         }).join('') + '</div>';
     }
 
-    c.innerHTML = h;
+    container.innerHTML = html;
     loadAssets();
 }
 
