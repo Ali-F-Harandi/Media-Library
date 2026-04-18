@@ -36,7 +36,8 @@ async function showDetailPage(idx) {
 
     var html = '<div class="detail-hero">' +
         '<div class="detail-hero-poster">' +
-            (m.posterUrl ? '<img src="' + m.posterUrl + '">' : '') +
+            (m.posterUrl ? '<img src="' + m.posterUrl + '">' : 
+             '<div class="no-poster-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg></div>') +
         '</div>' +
         '<div class="detail-hero-info">' +
             '<h1 class="detail-hero-title">' + window.Utils.escHtml(m.title) + '</h1>' +
@@ -273,9 +274,10 @@ async function copyMoviePath(idx) {
     if (!m) return;
     try {
         // Use fullPath if available, otherwise fall back to relativePath
+        // fullPath contains the complete absolute path (e.g., D:/Movies/Movie Name (2012))
         const pathToCopy = m.fullPath || m.relativePath;
         await navigator.clipboard.writeText(pathToCopy);
-        window.Utils.showToast('Full path copied to clipboard', 'success');
+        window.Utils.showToast('Path copied: ' + pathToCopy, 'success');
     } catch(e) {
         window.Utils.showToast('Failed to copy path', 'warning');
     }

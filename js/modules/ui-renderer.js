@@ -3,6 +3,13 @@
 
 var currentView = localStorage.getItem('movieLibView') || 'grid';
 
+// Display mode constants: grid, detail (extended info), list
+var VIEW_MODES = {
+    GRID: 'grid',
+    DETAIL: 'detail',
+    LIST: 'list'
+};
+
 function updateStats() {
     var ts = window.allMovies.reduce(function(s, m) { return s + m.fileSize; }, 0);
     document.getElementById('headerStats').textContent =
@@ -103,6 +110,11 @@ async function loadAssets() {
 }
 
 function setView(view) {
+    // Validate view mode against VIEW_MODES constants
+    if (!VIEW_MODES[view.toUpperCase()]) {
+        console.warn('[UI Renderer] Invalid view mode:', view);
+        view = VIEW_MODES.GRID;
+    }
     currentView = view;
     localStorage.setItem('movieLibView', view);
     document.querySelectorAll('.view-btn').forEach(function(btn) {
@@ -201,7 +213,8 @@ function renderMovies() {
                 '</div>' +
             '</div>';
         }).join('') + '</div>';
-    } else {
+    } else if (currentView === VIEW_MODES.LIST) {
+        // List view: compact horizontal list with essential info
         h = '<div class="movie-list">' + window.filteredMovies.map(function(m, i) {
             return '<div class="movie-list-item" onclick="showDetailPage(' + i + ')">' +
                 '<div class="list-poster">' +

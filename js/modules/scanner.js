@@ -87,10 +87,7 @@ async function processMovieFolder(fh, rootName) {
         } catch(e) {}
     }
     
-    // Validate: must have a poster image
-    if (!posterHandle) {
-        return { reason: 'No poster image' };
-    }
+    // Note: poster is optional - movie will still be added with placeholder icon
     
     // Parse NFO file if present
     var nfoData = null;
@@ -111,6 +108,7 @@ async function processMovieFolder(fh, rootName) {
     var qm = videoHandle.name.match(/(\d{3,4}p|720p|1080p|2160p|4[kK]|HDR|Blu-?ray|WEB-?DL|WEBRip|HDTV)/i);
     
     // Build full absolute path by traversing up the directory tree
+    // This creates a complete path like "D:/Movies/American Reunion (2012)"
     var fullPath = '';
     try {
         var currentDir = fh;
@@ -131,12 +129,15 @@ async function processMovieFolder(fh, rootName) {
             }
         }
         
-        // Join path parts with forward slashes
+        // Join path parts with forward slashes for cross-platform compatibility
         fullPath = pathParts.join('/');
     } catch(e) {
         console.log('[Scanner Debug] Could not build full path:', e);
         fullPath = rootName + '/' + fh.name;
     }
+    
+    // Store root name for reference (used as fallback for fullPath)
+    var libraryRoot = rootName;
     
     // Return complete movie object with all metadata
     return {
