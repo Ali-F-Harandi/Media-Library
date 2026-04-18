@@ -3,6 +3,11 @@
  * Handles the movie detail page display and interactions
  */
 
+// SVG placeholder for actor images (encoded to avoid syntax issues)
+var ACTOR_PLACEHOLDER = "data:image/svg+xml," + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/></svg>'
+);
+
 // Define function using var to ensure it's available before assignment
 var showDetailPage = async function(idx) {
     var m = window.filteredMovies[idx];
@@ -270,7 +275,7 @@ var showDetailPage = async function(idx) {
                                 var localFile = await m.actorImages[variant].getFile();
                                 a.localActorUrl = URL.createObjectURL(localFile);
                             }
-                            actorImgHtml = '<img src="' + a.localActorUrl + '" onerror="this.onerror=null;this.src=\'data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1.5\\'><circle cx=\\'12\\' cy=\\'8\\' r=\\'4\\'/><path d=\\'M6 20v-2a6 6 0 0 1 12 0v2\\'/></svg>\';">';
+                            actorImgHtml = '<img src="' + a.localActorUrl + '" onerror="this.onerror=null;this.src=\'' + ACTOR_PLACEHOLDER + '\';">';
                             hasLocalImage = true;
                             break;
                         } catch(e) {
@@ -282,7 +287,7 @@ var showDetailPage = async function(idx) {
             
             // If no local image, use web image from NFO
             if (!hasLocalImage && a.thumb) {
-                actorImgHtml = '<img src="' + window.Utils.escHtml(a.thumb) + '" onerror="this.onerror=null;this.src=\'data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1.5\\'><circle cx=\\'12\\' cy=\\'8\\' r=\\'4\\'/><path d=\\'M6 20v-2a6 6 0 0 1 12 0v2\\'/></svg>\';">';
+                actorImgHtml = '<img src="' + window.Utils.escHtml(a.thumb) + '" onerror="this.onerror=null;this.src=\'' + ACTOR_PLACEHOLDER + '\';">';
             }
             
             html += '<div class="detail-cast-card">' +
