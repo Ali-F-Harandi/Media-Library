@@ -231,3 +231,7 @@ function renderMovies() {
 
 // Export for use in other modules
 window.UIRenderer = { updateStats, toggleSkippedPanel, filterMovies, loadAssets, setView, renderMovies };
+
+// Also expose as global functions for inline HTML handlers
+window.filterMovies = filterMovies;
+window.setView = setView;

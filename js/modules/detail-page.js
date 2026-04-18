@@ -384,11 +384,11 @@ function closeSetView() {
         searchInput.value = window.previousSearchQuery || '';
     }
     
-    // Reload the main view
-    if (typeof window.renderMovieList === 'function') {
-        window.renderMovieList();
-    } else if (typeof window.UIRenderer !== 'undefined' && typeof window.UIRenderer.renderLibrary === 'function') {
-        window.UIRenderer.renderLibrary(window.filteredMovies);
+    // Reload the main view using filterMovies which calls renderMovies
+    if (typeof window.UIRenderer !== 'undefined' && typeof window.UIRenderer.filterMovies === 'function') {
+        window.UIRenderer.filterMovies();
+    } else if (typeof window.filterMovies === 'function') {
+        window.filterMovies();
     } else {
         // Fallback: re-render from app.js
         location.reload();
