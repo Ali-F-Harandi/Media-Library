@@ -285,3 +285,226 @@ body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background
 .detail-genres{justify-content:center}
 }
 @media(max-width:480px){.movie-grid{grid-template-columns:repeat(2,1fr)}}
+
+/* Collections Tab Styles */
+.nav-tabs {
+    display: flex;
+    background: var(--bg-card);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+
+.nav-tab {
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.nav-tab.active {
+    background: var(--accent);
+    color: #fff;
+}
+
+.nav-tab:hover:not(.active) {
+    background: var(--bg-hover);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.collections-header {
+    margin-bottom: 2rem;
+}
+
+.collections-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.collections-subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+.collections-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.collection-card {
+    background: var(--bg-card);
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: 0.3s;
+    border: 1px solid transparent;
+    position: relative;
+}
+
+.collection-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--accent);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.collection-poster-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2px;
+    aspect-ratio: 16/9;
+    overflow: hidden;
+    background: var(--bg-secondary);
+}
+
+.collection-poster-item {
+    position: relative;
+    aspect-ratio: 2/3;
+    background: var(--bg-secondary);
+}
+
+.collection-poster-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.collection-poster-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.collection-info {
+    padding: 1rem;
+}
+
+.collection-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.collection-movie-count {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.collection-overview {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Collection Detail View */
+.collection-detail-header {
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.back-to-collections-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.2rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.2s;
+    font-family: inherit;
+    margin-bottom: 1rem;
+}
+
+.back-to-collections-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--text-muted);
+}
+
+.collection-detail-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.collection-detail-overview {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    max-width: 800px;
+    margin-bottom: 0.75rem;
+}
+
+.collection-detail-count {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+/* Fix for movie-quality badge positioning */
+.poster-container {
+    position: relative;
+}
+
+.movie-quality {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: var(--tag-bg);
+    color: var(--tag-color);
+    border-radius: 4px;
+    z-index: 2;
+    white-space: nowrap;
+}
+
+/* Ensure card content stays within bounds */
+.card-info {
+    overflow: hidden;
+}
+
+.movie-title {
+    word-wrap: break-word;
+    hyphens: auto;
+}
+
+/* Hide search and view toggle on collections tab */
+#searchBox.hidden,
+#viewToggle.hidden {
+    display: none;
+}

@@ -99,7 +99,7 @@ async function showDetailPage(idx) {
         if (nfo.setOverview) {
             html += '<p style="color:var(--text-secondary);line-height:1.6;margin-bottom:1rem">' + window.Utils.escHtml(nfo.setOverview) + '</p>';
         }
-        html += '<button class="detail-secondary-btn" onclick="showSetMovies(\'' + window.Utils.escHtml(nfo.setName).replace(/'/g, "\\'") + '\')" style="padding:.6rem 1.2rem;font-size:.9rem">' +
+        html += '<button class="detail-secondary-btn" onclick="goToCollection(\'' + window.Utils.escHtml(nfo.setName).replace(/'/g, "\\'") + '\')" style="padding:.6rem 1.2rem;font-size:.9rem">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px">' +
                 '<rect x="3" y="3" width="18" height="18" rx="2"/>' +
                 '<path d="M9 3v18M3 9h18M3 15h18M15 3v18"/>' +
@@ -279,121 +279,45 @@ async function copyMoviePath(idx) {
     }
 }
 
-// Show all movies in a collection/set
-function showSetMovies(setName) {
-    var setMovies = window.allMovies.filter(function(m) {
-        return m.nfoData && m.nfoData.setName === setName;
-    });
+// Go to collection tab and show specific collection
+window.goToCollection = function(setName) {
+    // Close detail page first
+    closeDetailPage();
     
-    if (setMovies.length === 0) {
-        window.Utils.showToast('No other movies found in this collection', 'warning');
+    // Find the collection in collectionsData
+    if (!window.collectionsData || window.collectionsData.length === 0) {
+        // Extract collections if not already done
+        if (typeof window.Collections !== 'undefined' && window.Collections.renderCollections) {
+            window.Collections.renderCollections();
+        }
+    }
+    
+    // Find collection index by name
+    var collectionIdx = -1;
+    if (window.collectionsData) {
+        for (var i = 0; i < window.collectionsData.length; i++) {
+            if (window.collectionsData[i].name === setName) {
+                collectionIdx = i;
+                break;
+            }
+        }
+    }
+    
+    if (collectionIdx === -1) {
+        window.Utils.showToast('Collection not found', 'warning');
         return;
     }
     
-    // Store original filter state
-    window.previousFilteredMovies = window.filteredMovies;
-    window.previousSearchQuery = document.getElementById('searchInput') ? document.getElementById('searchInput').value : '';
-    
-    // Create a temporary view showing only these movies
-    var gridContainer = document.querySelector('.main-content');
-    if (!gridContainer) {
-        gridContainer = document.getElementById('app');
-    }
-    
-    // Build the set view HTML
-    var html = '<div style="padding:2rem">' +
-        '<button onclick="window.DetailPage.closeSetView()" class="detail-back-btn" style="margin-bottom:1.5rem;display:inline-flex;align-items:center;gap:0.5rem;padding:0.75rem 1.25rem;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:0.95rem;font-weight:500">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>' +
-            'Back to Library' +
-        '</button>' +
-        '<h2 style="font-size:1.8rem;font-weight:700;margin-bottom:0.5rem;color:var(--text-primary)">' + window.Utils.escHtml(setName) + '</h2>' +
-        '<p style="color:var(--text-secondary);margin-bottom:2rem;font-size:1rem">' + setMovies.length + ' movie' + (setMovies.length !== 1 ? 's' : '') + ' in collection</p>' +
-        '<div id="setMovieGrid" class="movie-grid"></div>' +
-    '</div>';
-    
-    gridContainer.innerHTML = html;
-    
-    // Render movie cards for the set
+    // Switch to collections tab and show the collection
     setTimeout(function() {
-        var gridEl = document.getElementById('setMovieGrid');
-        if (!gridEl) return;
-        
-        setMovies.forEach(function(m) {
-            var card = document.createElement('div');
-            card.className = 'movie-card';
-            card.style.cursor = 'pointer';
-            card.onclick = function() {
-                // Find this movie in allMovies and show detail
-                var realIdx = window.allMovies.indexOf(m);
-                if (realIdx !== -1) {
-                    window.filteredMovies = window.allMovies;
-                    window.DetailPage.showDetailPage(realIdx);
-                }
-            };
-            
-            var posterHtml = '';
-            if (m.posterUrl) {
-                posterHtml = '<img class="poster-img loaded" src="' + m.posterUrl + '" alt="' + window.Utils.escHtml(m.title) + '">';
-            } else {
-                posterHtml = '<div class="no-poster-placeholder">' +
-                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
-                        '<rect x="3" y="3" width="18" height="18" rx="2"/>' +
-                        '<circle cx="8.5" cy="8.5" r="1.5"/>' +
-                        '<path d="M21 15l-5-5L5 21"/>' +
-                    '</svg>' +
-                    'No Poster' +
-                '</div>';
-            }
-            
-            var qualityBadge = m.quality ? '<span class="movie-quality">' + window.Utils.escHtml(m.quality) + '</span>' : '';
-            var ratingBadge = m.nfoData && m.nfoData.rating ? 
-                '<span class="rating-badge">★ ' + m.nfoData.rating.toFixed(1) + '</span>' : '';
-            
-            card.innerHTML = '<div class="poster-container">' +
-                posterHtml +
-                '<div class="card-overlay">' +
-                    '<svg viewBox="0 0 24 24" fill="currentColor" style="width:48px;height:48px;opacity:0.9"><polygon points="5,3 19,12 5,21"/></svg>' +
-                '</div>' +
-                qualityBadge +
-                ratingBadge +
-            '</div>' +
-            '<div class="card-info">' +
-                '<div class="movie-title">' + window.Utils.escHtml(m.title) + '</div>' +
-                '<div class="movie-year">' + m.year + '</div>' +
-                (m.nfoData && m.nfoData.genres && m.nfoData.genres.length ? 
-                    '<div class="movie-genre" style="margin-top:0.25rem">' + window.Utils.escHtml(m.nfoData.genres.slice(0, 2).join(', ')) + '</div>' : '') +
-                '<div class="movie-filesize">' + window.Utils.formatBytes(m.fileSize) + '</div>' +
-            '</div>';
-            
-            gridEl.appendChild(card);
-        });
-    }, 50);
-}
-
-function closeSetView() {
-    // Restore previous state
-    if (window.previousFilteredMovies) {
-        window.filteredMovies = window.previousFilteredMovies;
-    } else {
-        window.filteredMovies = window.allMovies;
-    }
-    
-    // Clear search if needed
-    var searchInput = document.getElementById('searchInput');
-    if (searchInput && window.previousSearchQuery !== undefined) {
-        searchInput.value = window.previousSearchQuery || '';
-    }
-    
-    // Reload the main view using filterMovies which calls renderMovies
-    if (typeof window.UIRenderer !== 'undefined' && typeof window.UIRenderer.filterMovies === 'function') {
-        window.UIRenderer.filterMovies();
-    } else if (typeof window.filterMovies === 'function') {
-        window.filterMovies();
-    } else {
-        // Fallback: re-render from app.js
-        location.reload();
-    }
-}
+        if (typeof window.Collections !== 'undefined' && window.Collections.showCollectionDetail) {
+            window.switchTab('collections');
+            window.Collections.showCollectionDetail(collectionIdx);
+        } else {
+            window.Utils.showToast('Collections module not loaded', 'warning');
+        }
+    }, 300);
+};
 
 // Export for use in other modules
-window.DetailPage = { showDetailPage, closeDetailPage, copyMoviePath, showSetMovies, closeSetView };
+window.DetailPage = { showDetailPage, closeDetailPage, copyMoviePath, goToCollection };
