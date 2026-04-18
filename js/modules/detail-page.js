@@ -375,3 +375,7 @@ window.goToCollection = function(setName) {
 
 // Export for use in other modules
 window.DetailPage = { showDetailPage, closeDetailPage, copyMoviePath, goToCollection };
+
+// Also expose as global functions for inline HTML handlers
+window.showDetailPage = showDetailPage;
+window.closeDetailPage = closeDetailPage;
