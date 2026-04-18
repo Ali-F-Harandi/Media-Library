@@ -40,6 +40,22 @@ var controlBarInterval = null;
 var loadedSubtitleFiles = new Map();
 
 // ============================================================================
+// TV SHOW PLAYBACK STATE
+// ============================================================================
+
+/** Whether we're currently playing a TV episode (vs a movie) */
+var isPlayingTVShow = false;
+
+/** Current TV show movie index in filteredMovies */
+var currentTVShowMovieIdx = -1;
+
+/** Current season index within the TV show's seasonFolders array */
+var currentTVSeasonIdx = -1;
+
+/** Current episode index within the season's episodes array */
+var currentTVEpisodeIdx = -1;
+
+// ============================================================================
 // SUBTITLE UTILITIES
 // ============================================================================
 
@@ -573,6 +589,12 @@ function closePlayer() {
         audioMenuContainer.remove();
     }
     
+    // Clean up TV show episode navigator if present
+    const tvNavContainer = document.getElementById('tvEpisodeNavContainer');
+    if (tvNavContainer) {
+        tvNavContainer.remove();
+    }
+    
     // Revoke video object URL to free memory
     if (currentVideoUrl) {
         URL.revokeObjectURL(currentVideoUrl);
@@ -582,14 +604,309 @@ function closePlayer() {
     // Clear global references
     window.currentSubtitleFiles = null;
     window.currentVideoElement = null;
+    isPlayingTVShow = false;
+    currentTVShowMovieIdx = -1;
+    currentTVSeasonIdx = -1;
+    currentTVEpisodeIdx = -1;
     
     document.getElementById('playerModal').classList.remove('active');
+}
+
+// ============================================================================
+// TV SHOW EPISODE PLAYER
+// ============================================================================
+
+/**
+ * Play a specific TV episode from a TV show
+ * Opens the episode video file and sets up the player with episode navigation
+ * 
+ * @param {number} movieIdx - Index of the TV show in window.filteredMovies
+ * @param {number} seasonIdx - Index of the season in the TV show's seasonFolders array
+ * @param {number} episodeIdx - Index of the episode in the season's episodes array
+ */
+async function playTVEpisode(movieIdx, seasonIdx, episodeIdx) {
+    console.log('[VideoPlayer Debug] playTVEpisode called:', movieIdx, seasonIdx, episodeIdx);
+    
+    if (movieIdx < 0 || movieIdx >= window.filteredMovies.length) {
+        console.error('[VideoPlayer Debug] Invalid movie index:', movieIdx);
+        return;
+    }
+    
+    var m = window.filteredMovies[movieIdx];
+    if (!m || !m.isTVShow) {
+        console.error('[VideoPlayer Debug] Not a TV show');
+        return;
+    }
+    
+    var season = m.seasonFolders[seasonIdx];
+    if (!season || !season.episodes || !season.episodes[episodeIdx]) {
+        console.error('[VideoPlayer Debug] Invalid season/episode index');
+        return;
+    }
+    
+    var episode = season.episodes[episodeIdx];
+    
+    // Set TV playback state
+    isPlayingTVShow = true;
+    currentTVShowMovieIdx = movieIdx;
+    currentTVSeasonIdx = seasonIdx;
+    currentTVEpisodeIdx = episodeIdx;
+    currentMovieIndex = movieIdx;
+    
+    try {
+        if (episode.handle && typeof episode.handle.getFile === 'function') {
+            const file = await episode.handle.getFile();
+            
+            if (currentVideoUrl) {
+                URL.revokeObjectURL(currentVideoUrl);
+            }
+            
+            currentVideoUrl = URL.createObjectURL(file);
+            
+            // Setup player with TV show info
+            setupTVShowPlayer(m, season, episode, currentVideoUrl);
+            
+            window.Utils.showToast('Playing S' + String(season.seasonNumber).padStart(2, '0') + 'E' + String(episode.episodeNumber).padStart(2, '0') + ' - ' + episode.title, 'success');
+        } else {
+            window.Utils.showToast('Cannot open episode: File handle not available', 'warning');
+        }
+    } catch(e) {
+        console.error('[VideoPlayer Debug] Error opening episode:', e);
+        window.Utils.showToast('Error opening episode: ' + e.message, 'warning');
+    }
+}
+
+/**
+ * Setup the web player for a TV show episode
+ * Includes season/episode info in title and episode navigation buttons
+ * 
+ * @param {Object} show - TV show data object
+ * @param {Object} season - Season data object
+ * @param {Object} episode - Episode data object
+ * @param {string} videoUrl - Object URL for the video file
+ */
+async function setupTVShowPlayer(show, season, episode, videoUrl) {
+    const modal = document.getElementById('playerModal');
+    const video = document.getElementById('videoPlayer');
+    const title = document.getElementById('playerTitle');
+    
+    // Set title with show name, season, and episode info
+    var seasonLabel = 'S' + String(season.seasonNumber).padStart(2, '0');
+    var episodeLabel = 'E' + String(episode.episodeNumber).padStart(2, '0');
+    title.textContent = show.title + ' - ' + seasonLabel + episodeLabel + ' - ' + episode.title;
+    
+    // Load video source
+    video.src = videoUrl;
+    video.load();
+    
+    // Show the player modal
+    modal.classList.add('active');
+    
+    // Load subtitles for this episode
+    await loadSubtitlesForTVEpisode(season, episode, video);
+    
+    // Add TV episode navigator to player
+    addTVEpisodeNavigator(show, season, episode);
+    
+    // Setup event listeners
+    video.onloadedmetadata = function() {
+        console.log('[VideoPlayer Debug] Episode loaded, duration:', video.duration);
+        checkAudioTracks(video);
+        video.play().catch(e => console.log('[VideoPlayer Debug] Auto-play prevented:', e));
+    };
+    
+    video.onerror = function(e) {
+        console.error('[VideoPlayer Debug] Episode video error:', e);
+        window.Utils.showToast('Error loading episode', 'warning');
+    };
+}
+
+/**
+ * Add episode navigation controls to the player
+ * Shows previous/next episode buttons and current episode indicator
+ */
+function addTVEpisodeNavigator(show, season, episode) {
+    // Remove existing navigator if present
+    var existing = document.getElementById('tvEpisodeNavContainer');
+    if (existing) existing.remove();
+    
+    var playerHeader = document.querySelector('.player-header');
+    var navContainer = document.createElement('div');
+    navContainer.id = 'tvEpisodeNavContainer';
+    navContainer.className = 'player-subtitle-menu';
+    
+    var seasonLabel = 'S' + String(season.seasonNumber).padStart(2, '0');
+    var episodeLabel = 'E' + String(episode.episodeNumber).padStart(2, '0');
+    
+    // Find previous and next episodes
+    var hasPrev = false;
+    var hasNext = false;
+    
+    // Check previous: same season previous episode, or last episode of previous season
+    if (currentTVEpisodeIdx > 0) {
+        hasPrev = true;
+    } else if (currentTVSeasonIdx > 0) {
+        var prevSeason = show.seasonFolders[currentTVSeasonIdx - 1];
+        if (prevSeason && prevSeason.episodes && prevSeason.episodes.length > 0) {
+            hasPrev = true;
+        }
+    }
+    
+    // Check next: same season next episode, or first episode of next season
+    if (currentTVEpisodeIdx < season.episodes.length - 1) {
+        hasNext = true;
+    } else if (currentTVSeasonIdx < show.seasonFolders.length - 1) {
+        var nextSeason = show.seasonFolders[currentTVSeasonIdx + 1];
+        if (nextSeason && nextSeason.episodes && nextSeason.episodes.length > 0) {
+            hasNext = true;
+        }
+    }
+    
+    navContainer.innerHTML = 
+        '<div class="player-control-group tv-episode-nav">' +
+            '<button class="player-control-btn tv-ep-nav-btn' + (!hasPrev ? ' disabled' : '') + '" id="tvPrevEpBtn" onclick="playPrevEpisode()">' +
+                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                    '<polyline points="15 18 9 12 15 6"/>' +
+                '</svg>' +
+                '<span>Prev Ep</span>' +
+            '</button>' +
+            '<span class="tv-ep-indicator">' + seasonLabel + episodeLabel + '</span>' +
+            '<button class="player-control-btn tv-ep-nav-btn' + (!hasNext ? ' disabled' : '') + '" id="tvNextEpBtn" onclick="playNextEpisode()">' +
+                '<span>Next Ep</span>' +
+                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                    '<polyline points="9 18 15 12 9 6"/>' +
+                '</svg>' +
+            '</button>' +
+        '</div>';
+    
+    playerHeader.appendChild(navContainer);
+}
+
+/**
+ * Play the previous episode in the TV show
+ * Navigates across season boundaries if needed
+ */
+window.playPrevEpisode = function() {
+    if (!isPlayingTVShow || currentTVShowMovieIdx < 0) return;
+    
+    var m = window.filteredMovies[currentTVShowMovieIdx];
+    if (!m) return;
+    
+    var newSeasonIdx = currentTVSeasonIdx;
+    var newEpisodeIdx = currentTVEpisodeIdx - 1;
+    
+    // If at beginning of season, go to last episode of previous season
+    if (newEpisodeIdx < 0) {
+        newSeasonIdx = currentTVSeasonIdx - 1;
+        if (newSeasonIdx < 0) return; // Already at first episode
+        
+        var prevSeason = m.seasonFolders[newSeasonIdx];
+        if (prevSeason && prevSeason.episodes && prevSeason.episodes.length > 0) {
+            newEpisodeIdx = prevSeason.episodes.length - 1;
+        } else {
+            return;
+        }
+    }
+    
+    playTVEpisode(currentTVShowMovieIdx, newSeasonIdx, newEpisodeIdx);
+};
+
+/**
+ * Play the next episode in the TV show
+ * Navigates across season boundaries if needed
+ */
+window.playNextEpisode = function() {
+    if (!isPlayingTVShow || currentTVShowMovieIdx < 0) return;
+    
+    var m = window.filteredMovies[currentTVShowMovieIdx];
+    if (!m) return;
+    
+    var currentSeason = m.seasonFolders[currentTVSeasonIdx];
+    var newSeasonIdx = currentTVSeasonIdx;
+    var newEpisodeIdx = currentTVEpisodeIdx + 1;
+    
+    // If at end of season, go to first episode of next season
+    if (newEpisodeIdx >= currentSeason.episodes.length) {
+        newSeasonIdx = currentTVSeasonIdx + 1;
+        if (newSeasonIdx >= m.seasonFolders.length) return; // Already at last episode
+        
+        var nextSeason = m.seasonFolders[newSeasonIdx];
+        if (nextSeason && nextSeason.episodes && nextSeason.episodes.length > 0) {
+            newEpisodeIdx = 0;
+        } else {
+            return;
+        }
+    }
+    
+    playTVEpisode(currentTVShowMovieIdx, newSeasonIdx, newEpisodeIdx);
+};
+
+/**
+ * Load subtitles for a specific TV episode
+ * Scans the season folder for subtitle files matching the episode
+ * 
+ * @param {Object} season - Season data object
+ * @param {Object} episode - Episode data object
+ * @param {HTMLVideoElement} videoElement - Video element to attach subtitles to
+ */
+async function loadSubtitlesForTVEpisode(season, episode, videoElement) {
+    console.log('[VideoPlayer Debug] Loading subtitles for episode:', episode.title);
+    
+    try {
+        const subtitleExts = ['.srt', '.vtt', '.ass', '.ssa', '.sub'];
+        const subtitleFiles = [];
+        
+        // Use season's collected subtitle files if available
+        if (season.subtitleFiles && season.subtitleFiles.length > 0) {
+            // Filter subtitle files that match this episode's name
+            var epBaseName = episode.fileName.replace(/\.[^.]+$/, '').toLowerCase();
+            
+            for (var i = 0; i < season.subtitleFiles.length; i++) {
+                var subFile = season.subtitleFiles[i];
+                var subName = subFile.name.toLowerCase();
+                
+                // Check if subtitle filename relates to this episode
+                if (subName.includes(epBaseName) || 
+                    subName.includes('s' + String(season.seasonNumber).padStart(2, '0') + 'e' + String(episode.episodeNumber).padStart(2, '0'))) {
+                    subtitleFiles.push(subFile);
+                }
+            }
+        }
+        
+        // Also try scanning the season directory directly
+        if (subtitleFiles.length === 0 && season.handle) {
+            try {
+                for await (var entry of season.handle.values()) {
+                    if (entry.kind !== 'file') continue;
+                    var lo = entry.name.toLowerCase();
+                    var isSubtitle = subtitleExts.some(function(ext) { return lo.endsWith(ext); });
+                    var epBase = episode.fileName.replace(/\.[^.]+$/, '').toLowerCase();
+                    var isRelated = lo.includes(epBase) || 
+                        lo.includes('s' + String(season.seasonNumber).padStart(2, '0') + 'e' + String(episode.episodeNumber).padStart(2, '0'));
+                    
+                    if (isSubtitle && isRelated) {
+                        subtitleFiles.push(entry);
+                    }
+                }
+            } catch(e) {}
+        }
+        
+        console.log('[VideoPlayer Debug] Found', subtitleFiles.length, 'subtitle files for episode');
+        updateSubtitleMenu(subtitleFiles);
+        
+    } catch(e) {
+        console.error('[VideoPlayer Debug] Error loading episode subtitles:', e);
+        updateSubtitleMenu([]);
+    }
 }
 
 // Export VideoPlayer module for use in other parts of the application
 window.VideoPlayer = { 
     playMovie, 
+    playTVEpisode,
     closePlayer, 
     getCurrentIndex: function() { return currentMovieIndex; }, 
-    setCurrentIndex: function(i) { currentMovieIndex = i; } 
+    setCurrentIndex: function(i) { currentMovieIndex = i; },
+    isPlayingTVShow: function() { return isPlayingTVShow; },
+    getTVShowState: function() { return { movieIdx: currentTVShowMovieIdx, seasonIdx: currentTVSeasonIdx, episodeIdx: currentTVEpisodeIdx }; }
 };
