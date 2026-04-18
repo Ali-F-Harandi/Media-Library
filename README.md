@@ -142,9 +142,36 @@ When viewing movies:
 
 ```
 movie-library/
-├── index.html      # Main application file (HTML, CSS, and JavaScript)
-└── README.md       # This file
+├── index.html              # Main application HTML file
+├── css/
+│   └── styles.css          # Application styles with theme support
+├── js/
+│   ├── app.js              # Main application entry point
+│   ├── utils.js            # Utility functions (formatting, escaping, etc.)
+│   └── modules/
+│       ├── scanner.js      # Folder scanning and movie detection
+│       ├── video-player.js # Video playback with subtitles and audio tracks
+│       ├── detail-page.js  # Movie detail page display
+│       ├── nfo-parser.js   # NFO metadata file parser
+│       └── collections.js  # Movie collection/series grouping
+└── README.md               # This file
 ```
+
+### Module Descriptions
+
+- **`scanner.js`**: Scans selected folders for movies using File System Access API. Detects video files, posters, fanart, logos, and NFO metadata files. Builds full file paths by traversing directory trees.
+
+- **`video-player.js`**: Handles video playback in the browser with advanced features including subtitle support (auto-detection from folder), audio track switching, and keyboard navigation.
+
+- **`detail-page.js`**: Displays comprehensive movie information including poster, fanart background, metadata (director, cast, genres), technical specs, and provides actions like play and copy path.
+
+- **`nfo-parser.js`**: Parses Kodi-compatible NFO XML files to extract movie metadata including plot, rating, cast, technical specifications, and external database IDs (IMDb, TMDb).
+
+- **`collections.js`**: Groups movies into collections/series based on NFO set information, allowing users to browse related movies together.
+
+- **`utils.js`**: Provides utility functions used throughout the application including HTML escaping, file size formatting, toast notifications, and more.
+
+- **`app.js`**: Main application controller that coordinates all modules, handles user interactions, manages state, and initializes the application.
 
 ## 💡 How It Works
 
