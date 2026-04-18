@@ -290,18 +290,24 @@ function showSetMovies(setName) {
         return;
     }
     
+    // Store original filter state
+    window.previousFilteredMovies = window.filteredMovies;
+    window.previousSearchQuery = document.getElementById('searchInput') ? document.getElementById('searchInput').value : '';
+    
     // Create a temporary view showing only these movies
     var gridContainer = document.querySelector('.main-content');
-    var originalContent = gridContainer.innerHTML;
+    if (!gridContainer) {
+        gridContainer = document.getElementById('app');
+    }
     
     // Build the set view HTML
     var html = '<div style="padding:2rem">' +
-        '<button onclick="closeSetView()" class="detail-back-btn" style="margin-bottom:1.5rem">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>' +
+        '<button onclick="window.DetailPage.closeSetView()" class="detail-back-btn" style="margin-bottom:1.5rem;display:inline-flex;align-items:center;gap:0.5rem;padding:0.75rem 1.25rem;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:0.95rem;font-weight:500">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>' +
             'Back to Library' +
         '</button>' +
-        '<h2 style="font-size:1.8rem;font-weight:700;margin-bottom:.5rem">' + window.Utils.escHtml(setName) + '</h2>' +
-        '<p style="color:var(--text-secondary);margin-bottom:2rem">' + setMovies.length + ' movie' + (setMovies.length !== 1 ? 's' : '') + ' in collection</p>' +
+        '<h2 style="font-size:1.8rem;font-weight:700;margin-bottom:0.5rem;color:var(--text-primary)">' + window.Utils.escHtml(setName) + '</h2>' +
+        '<p style="color:var(--text-secondary);margin-bottom:2rem;font-size:1rem">' + setMovies.length + ' movie' + (setMovies.length !== 1 ? 's' : '') + ' in collection</p>' +
         '<div id="setMovieGrid" class="movie-grid"></div>' +
     '</div>';
     
@@ -312,16 +318,17 @@ function showSetMovies(setName) {
         var gridEl = document.getElementById('setMovieGrid');
         if (!gridEl) return;
         
-        var currentView = window.currentViewMode || 'grid';
-        
-        setMovies.forEach(function(m, idx) {
+        setMovies.forEach(function(m) {
             var card = document.createElement('div');
             card.className = 'movie-card';
+            card.style.cursor = 'pointer';
             card.onclick = function() {
-                // Find this movie in filteredMovies and show detail
+                // Find this movie in allMovies and show detail
                 var realIdx = window.allMovies.indexOf(m);
-                window.filteredMovies = window.allMovies;
-                window.showDetailPage(realIdx);
+                if (realIdx !== -1) {
+                    window.filteredMovies = window.allMovies;
+                    window.DetailPage.showDetailPage(realIdx);
+                }
             };
             
             var posterHtml = '';
@@ -345,7 +352,7 @@ function showSetMovies(setName) {
             card.innerHTML = '<div class="poster-container">' +
                 posterHtml +
                 '<div class="card-overlay">' +
-                    '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>' +
+                    '<svg viewBox="0 0 24 24" fill="currentColor" style="width:48px;height:48px;opacity:0.9"><polygon points="5,3 19,12 5,21"/></svg>' +
                 '</div>' +
                 qualityBadge +
                 ratingBadge +
@@ -353,20 +360,39 @@ function showSetMovies(setName) {
             '<div class="card-info">' +
                 '<div class="movie-title">' + window.Utils.escHtml(m.title) + '</div>' +
                 '<div class="movie-year">' + m.year + '</div>' +
-                qualityBadge +
                 (m.nfoData && m.nfoData.genres && m.nfoData.genres.length ? 
-                    '<div class="movie-genre">' + window.Utils.escHtml(m.nfoData.genres.slice(0, 2).join(', ')) + '</div>' : '') +
+                    '<div class="movie-genre" style="margin-top:0.25rem">' + window.Utils.escHtml(m.nfoData.genres.slice(0, 2).join(', ')) + '</div>' : '') +
                 '<div class="movie-filesize">' + window.Utils.formatBytes(m.fileSize) + '</div>' +
             '</div>';
             
             gridEl.appendChild(card);
         });
-    }, 100);
+    }, 50);
 }
 
 function closeSetView() {
+    // Restore previous state
+    if (window.previousFilteredMovies) {
+        window.filteredMovies = window.previousFilteredMovies;
+    } else {
+        window.filteredMovies = window.allMovies;
+    }
+    
+    // Clear search if needed
+    var searchInput = document.getElementById('searchInput');
+    if (searchInput && window.previousSearchQuery !== undefined) {
+        searchInput.value = window.previousSearchQuery || '';
+    }
+    
     // Reload the main view
-    window.renderMovieList();
+    if (typeof window.renderMovieList === 'function') {
+        window.renderMovieList();
+    } else if (typeof window.UIRenderer !== 'undefined' && typeof window.UIRenderer.renderLibrary === 'function') {
+        window.UIRenderer.renderLibrary(window.filteredMovies);
+    } else {
+        // Fallback: re-render from app.js
+        location.reload();
+    }
 }
 
 // Export for use in other modules
