@@ -729,9 +729,11 @@ function renderTVShows() {
         var seasonInfo = m.totalSeasons + ' Season' + (m.totalSeasons > 1 ? 's' : '') + ' \u2022 ' + m.totalEpisodes + ' Episode' + (m.totalEpisodes > 1 ? 's' : '');
 
         // Badge logic
-        var badgeHtml = '<span class="movie-quality tv-badge">TV Series</span>';
-        if (isAnime(m)) badgeHtml += ' <span class="movie-quality anime-badge">Anime</span>';
-        else if (isAnimation(m)) badgeHtml += ' <span class="movie-quality animation-badge">Animation</span>';
+        var badgeHtml = '<div class="movie-quality-stack">' +
+            '<span class="movie-quality tv-badge">TV Series</span>' +
+            (isAnime(m) ? '<span class="movie-quality anime-badge">Anime</span>' : '') +
+            (!isAnime(m) && isAnimation(m) ? '<span class="movie-quality animation-badge">Animation</span>' : '') +
+        '</div>';
 
         html += '<div class="movie-card tvshow-card" onclick="showTVShowFromTab(' + realIdx + ')">' +
             '<div class="poster-container">' +
@@ -974,7 +976,7 @@ function renderMovies() {
                         '</svg>' + r.toFixed(1) +
                     '</div>' : '') +
                     (m.quality ? '<span class="movie-quality">' + window.Utils.escHtml(m.quality) + '</span>' : '') +
-                    (isTV ? '<span class="movie-quality tv-badge">TV Series</span>' : '') +
+                    (isTV ? '<div class="movie-quality-stack"><span class="movie-quality tv-badge">TV Series</span></div>' : '') +
                 '</div>' +
                 '<div class="card-info">' +
                     '<div class="movie-title">' + window.Utils.escHtml(m.title) + '</div>' +
