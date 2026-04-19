@@ -727,17 +727,14 @@ function renderTVShows() {
         var seasonInfo = m.totalSeasons + ' Season' + (m.totalSeasons > 1 ? 's' : '') + ' \u2022 ' + m.totalEpisodes + ' Episode' + (m.totalEpisodes > 1 ? 's' : '');
 
         // Badge logic
-        var isAnim = isAnimation(m);
-        var isAnm = isAnime(m);
         var badgeHtml = '<span class="movie-quality tv-badge">TV Series</span>';
         var extraBadgeHtml = '';
         if (!m.isTVShow) {
-            if (isAnm) extraBadgeHtml = '<span class="movie-extra-badge anime-badge">Anime</span>';
-            else if (isAnim) extraBadgeHtml = '<span class="movie-extra-badge animation-badge">Animation</span>';
-        } else if (isAnm) {
-            extraBadgeHtml = '<span class="movie-extra-badge anime-badge">Anime</span>';
-        } else if (isAnim) {
-            extraBadgeHtml = '<span class="movie-extra-badge animation-badge">Animation</span>';
+            if (tabId === 'anime') extraBadgeHtml = '<span class="movie-extra-badge anime-badge">Anime</span>';
+            if (tabId === 'animation') extraBadgeHtml = '<span class="movie-extra-badge animation-badge">Animation</span>';
+        } else {
+            if (isAnime(m)) extraBadgeHtml = '<span class="movie-extra-badge anime-badge">Anime</span>';
+            else if (isAnimation(m)) extraBadgeHtml = '<span class="movie-extra-badge animation-badge">Animation</span>';
         }
 
         html += '<div class="movie-card tvshow-card" onclick="showTVShowFromTab(' + realIdx + ')">' +
