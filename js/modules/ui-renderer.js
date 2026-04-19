@@ -1014,3 +1014,34 @@ window.filterAnimationTab = filterAnimationTab;
 window.filterAnimeTab = filterAnimeTab;
 window.showItemFromTab = window.showItemFromTab;
 window.playItemDirectly = window.playItemDirectly;
+
+// ============================================================================
+// TAB SWITCHING FUNCTION
+// ============================================================================
+window.switchTab = function(tabName) {
+    // Remove active class from all nav tabs
+    document.querySelectorAll('.nav-tab').forEach(function(tab) {
+        tab.classList.remove('active');
+    });
+    
+    // Add active class to the clicked tab
+    var activeTabBtn = document.querySelector('.nav-tab[data-tab="' + tabName + '"]');
+    if (activeTabBtn) {
+        activeTabBtn.classList.add('active');
+    }
+    
+    // Hide all tab content
+    document.querySelectorAll('.tab-content').forEach(function(content) {
+        content.classList.remove('active');
+    });
+    
+    // Show the selected tab content
+    var tabContentId = tabName + 'Tab';
+    if (tabName === 'collections') {
+        tabContentId = 'collectionsTab';
+    }
+    var tabContent = document.getElementById(tabContentId);
+    if (tabContent) {
+        tabContent.classList.add('active');
+    }
+};
