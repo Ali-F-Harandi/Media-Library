@@ -1064,3 +1064,34 @@ window.switchTab = function(tabName) {
             searchBox.classList.add('hidden');
         }
     }
+    if (viewToggle) {
+        if (showSearchAndView) {
+            viewToggle.classList.remove('hidden');
+        } else {
+            viewToggle.classList.add('hidden');
+        }
+    }
+
+    // Refresh content for specific tabs
+    if (tabName === 'collections') {
+        if (typeof window.Collections !== 'undefined' && window.Collections.renderCollections) {
+            window.Collections.renderCollections();
+        }
+    }
+
+    if (tabName === 'tvshows') {
+        renderTVShows();
+    }
+
+    if (tabName === 'all') {
+        renderAllTab();
+    }
+
+    if (tabName === 'animation') {
+        renderAnimationTab();
+    }
+
+    if (tabName === 'anime') {
+        renderAnimeTab();
+    }
+};
