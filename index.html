@@ -3,24 +3,106 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#e50914">
+<!-- manifest removed: causes CORS errors on file:// protocol -->
 <title>Media Library</title>
-<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/styles.css?v=3">
 </head>
 <body>
+<div class="app-wrapper">
+<div class="scroll-progress-bar" id="scrollProgressBar"><div class="scroll-progress-fill" id="scrollProgressFill"></div></div>
 
+<!-- Welcome Screen -->
 <div class="welcome-screen" id="welcomeScreen">
-  <svg class="welcome-icon" viewBox="0 0 120 120" fill="none"><circle cx="60" cy="60" r="55" stroke="var(--accent)" stroke-width="2" opacity=".3"/><circle cx="60" cy="60" r="40" stroke="var(--accent)" stroke-width="2" opacity=".5"/><polygon points="52,40 52,80 85,60" fill="var(--accent)"/></svg>
-  <h1 class="welcome-title">Media Library</h1>
-  <p class="welcome-subtitle" id="welcomeSubtitle">Select a folder containing your movies and TV shows. You can add multiple folders.</p>
-  <button class="btn-select" onclick="selectFolder()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Select Media Folder</button>
-  <button class="btn-select secondary hidden" id="btnResume" onclick="resumeSession()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Resume Last Session</button>
-  <div class="supported-info"><p><strong>Recommended:</strong> Chrome or Edge<br><strong>Movies:</strong> Movie Name (Year) / [video, poster, fanart, nfo]<br><strong>TV Shows:</strong> Show Name (Year) / [Season folders, tvshow.nfo, poster, fanart]<br><strong>Formats:</strong> MP4, MKV, WebM, AVI, MOV</p></div>
+  <div class="welcome-bg">
+    <div class="welcome-particles" id="welcomeParticles"></div>
+    <div class="welcome-gradient-orb orb-1"></div>
+    <div class="welcome-gradient-orb orb-2"></div>
+    <div class="welcome-gradient-orb orb-3"></div>
+  </div>
+  <div class="welcome-content">
+    <div class="welcome-logo-wrapper">
+      <svg class="welcome-icon" viewBox="0 0 120 120" fill="none">
+        <circle cx="60" cy="60" r="55" stroke="var(--accent)" stroke-width="2" opacity=".3"/>
+        <circle cx="60" cy="60" r="40" stroke="var(--accent)" stroke-width="2" opacity=".5"/>
+        <polygon points="52,40 52,80 85,60" fill="var(--accent)"/>
+      </svg>
+    </div>
+    <h1 class="welcome-title">Media Library</h1>
+    <p class="welcome-subtitle" id="welcomeSubtitle">Select a folder containing your movies and TV shows. You can add multiple folders.</p>
+    <div class="welcome-actions">
+      <button class="btn-select primary-glow" onclick="selectFolder()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        Select Media Folder
+      </button>
+      <button class="btn-select secondary hidden" id="btnResume" onclick="resumeSession()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        Resume Last Session
+      </button>
+    </div>
+    <div class="welcome-drop-zone" id="welcomeDropZone">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".6"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+      <span>Or drag & drop a folder here</span>
+    </div>
+    <div class="welcome-info-grid">
+      <div class="welcome-info-card">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        <div>
+          <strong>Movies</strong>
+          <span>Movie Name (Year)</span>
+        </div>
+      </div>
+      <div class="welcome-info-card">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg>
+        <div>
+          <strong>TV Shows</strong>
+          <span>Show Name (Year)</span>
+        </div>
+      </div>
+      <div class="welcome-info-card">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-5"/></svg>
+        <div>
+          <strong>Formats</strong>
+          <span>MP4, MKV, WebM, AVI, MOV</span>
+        </div>
+      </div>
+    </div>
+    <div class="recent-folders-section" id="recentFoldersSection" style="display:none">
+      <h3 class="recent-folders-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Recently Opened
+      </h3>
+      <div class="recent-folders-list" id="recentFoldersList"></div>
+    </div>
+    <div class="welcome-stats" id="welcomeStats"></div>
+    <div class="welcome-shortcuts-hint">
+      <span class="kbd-hint" onclick="showKeyboardHelp()">
+        <kbd>?</kbd> Keyboard Shortcuts
+      </span>
+      <span class="kbd-hint">
+        <kbd>Ctrl</kbd>+<kbd>K</kbd> Quick Search
+      </span>
+    </div>
+  </div>
 </div>
 
-<div class="loading-overlay hidden" id="loadingOverlay"><div class="spinner"></div><p id="loadingText">Scanning folders...</p><p class="loading-progress" id="loadingProgress"></p></div>
+<!-- Loading Overlay -->
+<div class="loading-overlay hidden" id="loadingOverlay">
+  <div class="loading-card">
+    <div class="loading-spinner-ring">
+      <div class="spinner"></div>
+    </div>
+    <p id="loadingText" class="loading-text">Scanning folders...</p>
+    <div class="loading-bar-track">
+      <div class="loading-bar-fill" id="loadingBarFill"></div>
+    </div>
+    <p class="loading-progress" id="loadingProgress"></p>
+  </div>
+</div>
 
+<!-- App Container -->
 <div class="app-container" id="appContainer">
-  <header class="header">
+  <header class="header" id="appHeader">
     <div class="header-content">
       <div class="header-left">
         <svg class="app-logo" viewBox="0 0 40 40" fill="none"><rect x="2" y="2" width="36" height="36" rx="8" fill="var(--accent)" opacity=".2"/><polygon points="16,10 16,30 32,20" fill="var(--accent)"/></svg>
@@ -47,35 +129,94 @@
             <button class="nav-tab" data-tab="collections" onclick="switchTab('collections')">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h18M3 15h18M15 3v18"/></svg>Collections
             </button>
+            <button class="nav-tab" data-tab="favorites" onclick="switchTab('favorites')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>Favorites
+            </button>
+            <button class="nav-tab" data-tab="history" onclick="switchTab('history')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>History
+            </button>
+            <button class="nav-tab" data-tab="playlist" onclick="switchTab('playlist')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Playlist
+            </button>
+            <button class="nav-tab" data-tab="stats" onclick="switchTab('stats')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>Stats
+            </button>
+            <button class="nav-tab" data-tab="duplicates" onclick="switchTab('duplicates')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Dupes
+            </button>
           </div>
         </div>
         <div class="search-box" id="searchBox">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input type="text" placeholder="Search..." id="searchInput" oninput="filterMovies()">
+          <input type="text" placeholder="Filter items... (Ctrl+K)" id="searchInput">
+          <button class="search-clear-btn" id="searchClearBtn" onclick="clearSearchFilter()" title="Clear filter">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+          <kbd class="search-kbd" id="searchKbd">Ctrl+K</kbd>
         </div>
+        <div class="page-size-selector" id="pageSizeSelector">
+          <label>Per page:</label>
+          <select id="pageSizeSelect" onchange="changePageSize(this.value)">
+            <option value="20">20</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="all">All</option>
+          </select>
+        </div>
+        <button class="btn-header bulk-select-btn" id="bulkSelectBtn" onclick="toggleBulkSelect()" title="Bulk Select">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Select
+        </button>
         <div class="view-toggle" id="viewToggle">
-          <button class="view-btn active" data-view="grid" onclick="setView('grid')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>
-          <button class="view-btn" data-view="detail" onclick="setView('detail')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button>
-          <button class="view-btn" data-view="list" onclick="setView('list')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+          <button class="view-btn active" data-view="grid" onclick="setView('grid')" title="Grid View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>
+          <button class="view-btn" data-view="detail" onclick="setView('detail')" title="Detail View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button>
+          <button class="view-btn" data-view="list" onclick="setView('list')" title="List View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
         </div>
         <div class="theme-selector">
-          <button class="theme-btn" onclick="toggleThemeDropdown()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/><line x1="2" y1="12" x2="22" y2="12"/></svg>Theme</button>
+          <button class="theme-btn" onclick="toggleThemeDropdown()" title="Toggle Theme">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+          </button>
           <div class="theme-dropdown" id="themeDropdown">
             <button class="theme-option active" data-theme="dark" onclick="setTheme('dark')"><span class="theme-dot" style="background:#e50914"></span>Dark Mode</button>
             <button class="theme-option" data-theme="light" onclick="setTheme('light')"><span class="theme-dot" style="background:#c20008;border-color:#d2d2d7"></span>Light Mode</button>
           </div>
         </div>
-        <button class="btn-header" onclick="openManageFolders()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</button>
-        <button class="btn-header" onclick="addFolder()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Folder</button>
-        <button class="btn-header" onclick="selectFolder()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Reset Library</button>
+        <button class="btn-header" onclick="openManageFolders()" title="Manage Folders"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+        <button class="btn-header" onclick="addFolder()" title="Add Folder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Folder</button>
+        <div class="export-wrapper" id="exportWrapper">
+          <button class="btn-header" onclick="toggleExportDropdown()" title="Export Library">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export
+          </button>
+          <div class="export-dropdown" id="exportDropdown">
+            <button class="export-option" onclick="exportLibrary('json')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Export as JSON
+            </button>
+            <button class="export-option" onclick="exportLibrary('csv')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+              Export as CSV
+            </button>
+            <button class="export-option" onclick="exportLibrary('txt')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              Export as TXT
+            </button>
+          </div>
+        </div>
+        <button class="btn-header pwa-install-btn" id="pwaInstallBtn" onclick="installPWA()" style="display:none" title="Install App"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Install</button>
+        <button class="btn-header" onclick="selectFolder()" title="Reset Library"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Reset</button>
+        <button class="btn-header" onclick="randomPick()" title="Random Pick">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M16 8h.01"/><path d="M8 16h.01"/><path d="M12 12h.01"/></svg>
+          Lucky
+        </button>
       </div>
     </div>
   </header>
   <main class="main-content">
-    <!-- All Tab -->
-    <div id="allTab" class="tab-content active">
+    <!-- Shared Filter Bar - visible on all content tabs -->
+    <div class="shared-filter-bar" id="sharedFilterBar">
       <div class="filter-bar">
-        <select id="allSortSelect" onchange="filterAllTab()">
+        <select id="sharedSortSelect" onchange="handleSharedSortChange()">
           <option value="name-asc">Name A-Z</option>
           <option value="name-desc">Name Z-A</option>
           <option value="year-asc">Year Ascending</option>
@@ -83,11 +224,72 @@
           <option value="rating-desc">Rating High-Low</option>
           <option value="size-desc">Size Large-Small</option>
         </select>
-        <select id="allGenreSelect" class="genre-filter-select" onchange="filterAllTab()">
+        <select id="sharedGenreSelect" class="genre-filter-select" onchange="handleSharedGenreChange()">
           <option value="">All Genres</option>
         </select>
-        <span class="filter-count" id="allFilterCount"></span>
+        <button class="filter-panel-toggle" id="filterPanelToggle" onclick="toggleAdvancedFilters()" title="Advanced Filters">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+          Filters
+          <span class="filter-active-indicator" id="filterActiveIndicator"></span>
+        </button>
+        <span class="skipped-badge" onclick="toggleSkippedPanel()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span id="skippedCount">0</span> skipped
+        </span>
+        <span class="filter-count" id="sharedFilterCount"></span>
       </div>
+      <!-- Skipped panel (toggled by skipped badge) -->
+      <div id="skippedPanel" class="skipped-panel"><h4>Skipped Folders</h4><ul class="skipped-list" id="skippedList"></ul></div>
+      <!-- Advanced filter panel (toggled by filter button) -->
+      <div class="advanced-filter-panel" id="advancedFilterPanel">
+        <div class="filter-range-group">
+          <label class="filter-range-label">
+            <span>Year Range</span>
+            <span class="filter-range-value" id="yearRangeValue">1900 - 2030</span>
+          </label>
+          <div style="display:flex;gap:0.5rem;align-items:center">
+            <input type="range" class="filter-range-input" id="yearMinRange" min="1900" max="2030" value="1900" oninput="updateYearRange()">
+            <input type="range" class="filter-range-input" id="yearMaxRange" min="1900" max="2030" value="2030" oninput="updateYearRange()">
+          </div>
+        </div>
+        <div class="filter-range-group">
+          <label class="filter-range-label">
+            <span>Min Rating</span>
+            <span class="filter-range-value" id="ratingRangeValue">0+</span>
+          </label>
+          <input type="range" class="filter-range-input" id="ratingMinRange" min="0" max="10" step="0.5" value="0" oninput="updateRatingRange()">
+        </div>
+        <div class="filter-range-group">
+          <label class="filter-range-label"><span>Type</span></label>
+          <div class="filter-tag-group" id="typeFilterGroup">
+            <button class="filter-tag active" data-type="all" onclick="setTypeFilter('all', this)"><svg class="filter-tag-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>All</button>
+            <button class="filter-tag" data-type="movies" onclick="setTypeFilter('movies', this)"><svg class="filter-tag-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Movies</button>
+            <button class="filter-tag" data-type="tvshows" onclick="setTypeFilter('tvshows', this)"><svg class="filter-tag-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>TV Shows</button>
+          </div>
+        </div>
+        <div class="filter-range-group">
+          <label class="filter-range-label"><span>File Size</span></label>
+          <div class="filter-tag-group" id="sizeFilterGroup">
+            <button class="filter-tag active" data-size="all" onclick="setSizeFilter('all', this)"><svg class="filter-tag-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>All</button>
+            <button class="filter-tag" data-size="small" onclick="setSizeFilter('small', this)"><svg class="filter-tag-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>&lt;1 GB</button>
+            <button class="filter-tag" data-size="medium" onclick="setSizeFilter('medium', this)"><svg class="filter-tag-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>1-10 GB</button>
+            <button class="filter-tag" data-size="large" onclick="setSizeFilter('large', this)"><svg class="filter-tag-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>&gt;10 GB</button>
+          </div>
+        </div>
+        <div class="filter-range-group" id="genreTagContainer">
+          <label class="filter-range-label"><span>Genres</span></label>
+          <div class="genre-filter-tags" id="genreFilterTags">
+            <button class="genre-tag active" data-genre="all" onclick="toggleGenreTag('all', this)">All Genres</button>
+          </div>
+        </div>
+        <button class="filter-reset-btn" onclick="resetAdvancedFilters()" title="Reset all filters">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12a10 10 0 1 1-3.5-7.6"/><polyline points="22 4 22 12 14 12"/></svg>
+          Reset
+        </button>
+      </div>
+    </div>
+    <!-- All Tab -->
+    <div id="allTab" class="tab-content active">
       <div id="allTopRated"></div>
       <div id="allContainer"></div>
       <div id="allEmptyState" class="empty-state" style="display:none">
@@ -97,30 +299,16 @@
     </div>
     <!-- Movies Tab -->
     <div id="moviesTab" class="tab-content">
-      <div class="filter-bar"><select id="sortSelect" onchange="filterMovies()"><option value="name-asc">Name A-Z</option><option value="name-desc">Name Z-A</option><option value="year-asc">Year Ascending</option><option value="year-desc">Year Descending</option><option value="rating-desc">Rating High-Low</option><option value="size-desc">Size Large-Small</option></select><select id="moviesGenreSelect" class="genre-filter-select" onchange="filterMovies()"><option value="">All Genres</option></select><span class="skipped-badge" onclick="toggleSkippedPanel()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span id="skippedCount">0</span> skipped</span><span class="filter-count" id="filterCount"></span></div>
-      <div id="skippedPanel" class="skipped-panel"><h4>Skipped Folders</h4><ul class="skipped-list" id="skippedList"></ul></div>
       <div id="movieContainer"></div>
       <div id="emptyState" class="empty-state" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><h3>No movies found</h3><p>Try adding a folder or adjusting your search.</p></div>
     </div>
     <!-- TV Shows Tab -->
     <div id="tvshowsTab" class="tab-content">
-      <div class="filter-bar"><select id="tvSortSelect" onchange="filterTVShows()"><option value="name-asc">Name A-Z</option><option value="name-desc">Name Z-A</option><option value="year-asc">Year Ascending</option><option value="year-desc">Year Descending</option><option value="rating-desc">Rating High-Low</option><option value="size-desc">Size Large-Small</option></select><span class="filter-count" id="tvFilterCount"></span></div>
       <div id="tvshowContainer"></div>
       <div id="tvshowEmptyState" class="empty-state" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg><h3>No TV shows found</h3><p>TV shows with season folders will appear here.</p></div>
     </div>
     <!-- Animation Tab -->
     <div id="animationTab" class="tab-content">
-      <div class="filter-bar">
-        <select id="animationSortSelect" onchange="filterAnimationTab()">
-          <option value="name-asc">Name A-Z</option>
-          <option value="name-desc">Name Z-A</option>
-          <option value="year-asc">Year Ascending</option>
-          <option value="year-desc">Year Descending</option>
-          <option value="rating-desc">Rating High-Low</option>
-          <option value="size-desc">Size Large-Small</option>
-        </select>
-        <span class="filter-count" id="animationFilterCount"></span>
-      </div>
       <div id="animationContainer"></div>
       <div id="animationEmptyState" class="empty-state" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
@@ -129,17 +317,6 @@
     </div>
     <!-- Anime Tab -->
     <div id="animeTab" class="tab-content">
-      <div class="filter-bar">
-        <select id="animeSortSelect" onchange="filterAnimeTab()">
-          <option value="name-asc">Name A-Z</option>
-          <option value="name-desc">Name Z-A</option>
-          <option value="year-asc">Year Ascending</option>
-          <option value="year-desc">Year Descending</option>
-          <option value="rating-desc">Rating High-Low</option>
-          <option value="size-desc">Size Large-Small</option>
-        </select>
-        <span class="filter-count" id="animeFilterCount"></span>
-      </div>
       <div id="animeContainer"></div>
       <div id="animeEmptyState" class="empty-state" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
@@ -154,6 +331,70 @@
       </div>
       <div id="collectionsContainer" class="collections-grid"></div>
       <div id="collectionsEmptyState" class="empty-state" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h18M3 15h18M15 3v18"/></svg><h3>No collections found</h3><p>Collections will appear here when movies belong to a series or collection.</p></div>
+    </div>
+    <!-- Favorites Tab -->
+    <div id="favoritesTab" class="tab-content">
+      <div id="favoritesContainer"></div>
+      <div id="favoritesEmptyState" class="empty-state" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        <h3>No favorites yet</h3><p>Click the heart icon on any movie or show to add it to your favorites.</p>
+      </div>
+    </div>
+    <!-- History Tab -->
+    <div id="historyTab" class="tab-content">
+      <div class="filter-bar">
+        <span class="filter-count" id="historyFilterCount"></span>
+        <button class="btn-clear-history" onclick="clearWatchHistory()" title="Clear watch history">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          Clear All
+        </button>
+      </div>
+      <div id="historyContainer"></div>
+      <div id="historyEmptyState" class="empty-state" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <h3>No watch history yet</h3><p>Movies and episodes you play will appear here.</p>
+      </div>
+    </div>
+    <!-- Playlist Tab -->
+    <div id="playlistTab" class="tab-content">
+      <div class="filter-bar">
+        <span class="filter-count" id="playlistFilterCount"></span>
+        <button class="btn-clear-history" onclick="clearPlaylist()" title="Clear playlist">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          Clear All
+        </button>
+      </div>
+      <div id="playlistContainer"></div>
+      <div id="playlistEmptyState" class="empty-state" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <h3>Playlist is empty</h3><p>Add movies to your playlist to queue them up for playback.</p>
+      </div>
+    </div>
+    <!-- Stats Tab -->
+    <div id="statsTab" class="tab-content">
+      <div class="stats-header">
+        <h2 class="stats-title">Library Statistics</h2>
+        <p class="stats-subtitle" id="statsSubtitle">Overview of your media library</p>
+      </div>
+      <div id="statsContainer" class="stats-grid"></div>
+    </div>
+    <!-- Duplicates Tab -->
+    <div id="duplicatesTab" class="tab-content">
+      <div class="stats-header">
+        <h2 class="stats-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" style="vertical-align:middle;margin-right:0.5rem"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Duplicate Finder
+        </h2>
+        <p class="stats-subtitle">Find duplicate movies in your library</p>
+      </div>
+      <div class="filter-bar">
+        <span class="filter-count" id="duplicateFilterCount"></span>
+      </div>
+      <div id="duplicateContainer"></div>
+      <div id="duplicateEmptyState" class="empty-state" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        <h3>No duplicates found</h3><p>Your library has no duplicate movies. Each title appears only once.</p>
+      </div>
     </div>
     <!-- Collection Detail View -->
     <div id="collectionDetailView" class="tab-content">
@@ -171,8 +412,30 @@
   </main>
 </div>
 
-<div class="player-modal" id="playerModal"><div class="player-header"><span class="player-title" id="playerTitle">Now Playing</span><div class="player-controls"><button class="btn-close-player" onclick="closePlayer()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div><div class="player-container"><video id="videoPlayer" controls></video></div><div class="player-nav"><button class="nav-btn" id="prevBtn" onclick="playMovie(currentMovieIndex-1)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>Prev</button><button class="nav-btn" id="nextBtn" onclick="playMovie(currentMovieIndex+1)">Next<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button></div></div>
+<!-- Video Player Modal -->
+<div class="player-modal" id="playerModal">
+  <div class="player-header">
+    <span class="player-title" id="playerTitle">Now Playing</span>
+    <div class="player-header-indicators">
+      <span class="player-indicator" id="subtitleSizeIndicator" title="Subtitle Size">Medium</span>
+      <span class="player-indicator" id="audioTrackIndicator" title="Audio Tracks">N/A</span>
+    </div>
+    <div class="player-controls">
+      <button class="player-control-btn" onclick="toggleMiniPlayer()" title="Mini Player" style="margin-right:8px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="15" height="13" rx="2" ry="2"/><polyline points="17 2 22 7 17 12"/></svg><span>Mini</span></button>
+      <button class="btn-close-player" onclick="closePlayer()" title="Close Player (Esc)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+  </div>
+  <div class="player-container">
+    <video id="videoPlayer" controls></video>
+  </div>
+  <div class="player-nav">
+    <button class="nav-btn" id="prevBtn" onclick="playMovie(currentMovieIndex-1)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>Prev</button>
+    <button class="speed-control-btn" id="speedControlBtn" onclick="cyclePlaybackSpeed()" title="Playback Speed">1x</button>
+    <button class="nav-btn" id="nextBtn" onclick="playMovie(currentMovieIndex+1)">Next<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button>
+  </div>
+</div>
 
+<!-- Detail Page -->
 <div class="detail-page" id="detailPage">
   <div class="detail-page-bg" id="detailPageBg"></div>
   <div class="detail-page-scroll">
@@ -182,6 +445,7 @@
     </div>
   </div>
 </div>
+
 <!-- Manage Folders Modal -->
 <div class="modal-overlay hidden" id="manageFoldersModal">
   <div class="modal-container">
@@ -192,26 +456,139 @@
     <div class="modal-body">
       <div class="folder-list" id="folderList"></div>
       <button class="btn-add-folder" onclick="addFolderFromModal()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add New Folder</button>
+      <button class="btn-clear-cache" onclick="clearThumbnailCache()" title="Clear cached thumbnail images"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>Clear Thumbnail Cache</button>
     </div>
   </div>
 </div>
+
+<!-- Keyboard Shortcuts Modal -->
+<div class="modal-overlay hidden" id="keyboardHelpModal">
+  <div class="modal-container keyboard-help-container">
+    <div class="modal-header">
+      <h2 class="modal-title">Keyboard Shortcuts</h2>
+      <button class="modal-close" onclick="closeKeyboardHelp()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="shortcut-grid">
+        <div class="shortcut-section">
+          <h3>Tabs</h3>
+          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>1</kbd><span>All</span></div>
+          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>2</kbd><span>Movies</span></div>
+          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>3</kbd><span>TV Shows</span></div>
+          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>4</kbd><span>Animation</span></div>
+          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>5</kbd><span>Anime</span></div>
+          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>6</kbd><span>Collections</span></div>
+          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>7</kbd><span>Favorites</span></div>
+          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>8</kbd><span>History</span></div>
+          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>9</kbd><span>Playlist</span></div>
+          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>0</kbd><span>Stats</span></div>
+        </div>
+        <div class="shortcut-section">
+          <h3>Navigation</h3>
+          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>K</kbd><span>Focus search</span></div>
+          <div class="shortcut-row"><kbd>Arrow Keys</kbd><span>Navigate between cards</span></div>
+          <div class="shortcut-row"><kbd>Enter</kbd><span>Open focused card</span></div>
+          <div class="shortcut-row"><kbd>Esc</kbd><span>Close detail/player</span></div>
+        </div>
+        <div class="shortcut-section">
+          <h3>Player</h3>
+          <div class="shortcut-row"><kbd>&larr;</kbd><span>Previous</span></div>
+          <div class="shortcut-row"><kbd>&rarr;</kbd><span>Next</span></div>
+          <div class="shortcut-row"><kbd>Space</kbd><span>Play/Pause</span></div>
+          <div class="shortcut-row"><kbd>C</kbd><span>Cycle subtitles</span></div>
+          <div class="shortcut-row"><kbd>A</kbd><span>Cycle audio tracks</span></div>
+          <div class="shortcut-row"><kbd>F</kbd><span>Toggle fullscreen</span></div>
+          <div class="shortcut-row"><kbd>M</kbd><span>Toggle mute</span></div>
+          <div class="shortcut-row"><kbd>Shift</kbd>+<kbd>&larr;&rarr;</kbd><span>Seek ±30s</span></div>
+          <div class="shortcut-row"><kbd>Shift</kbd>+<kbd>&uarr;&darr;</kbd><span>Subtitle delay ±0.5s</span></div>
+        </div>
+        <div class="shortcut-section">
+          <h3>General</h3>
+          <div class="shortcut-row"><kbd>?</kbd><span>Show this help</span></div>
+          <div class="shortcut-row"><kbd>Dbl-click</kbd><span>Play media</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Scroll to Top -->
 <button class="scroll-to-top-btn hidden" id="scrollToTopBtn" onclick="window.scrollToTop()" title="Scroll to top">
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
 </button>
+
+<!-- Context Menu -->
+<div class="context-menu" id="contextMenu">
+  <button class="context-menu-item" data-action="play">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+    Play
+  </button>
+  <button class="context-menu-item" data-action="favorite">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    <span id="ctxFavLabel">Add to Favorites</span>
+  </button>
+  <button class="context-menu-item" data-action="playlist">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    Add to Playlist
+  </button>
+  <button class="context-menu-item" data-action="copypath">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    Copy Path
+  </button>
+  <div class="context-menu-divider"></div>
+  <button class="context-menu-item" data-action="detail">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+    Show Detail
+  </button>
+</div>
+
+<!-- Toast Container -->
 <div class="toast-container" id="toastContainer"></div>
 
 <!-- Modular JavaScript Files -->
-<script src="js/modules/database.js"></script>
-<script src="js/modules/utils.js"></script>
-<script src="js/modules/debug.js"></script>
-<script src="js/modules/nfo-parser.js"></script>
-<script src="js/modules/scanner.js"></script>
-<script src="js/modules/ui-renderer.js"></script>
-<script src="js/modules/detail-page.js"></script>
-<script src="js/modules/video-player.js"></script>
-<script src="js/modules/theme.js"></script>
-<script src="js/modules/folder-ops.js"></script>
-<script src="js/modules/collections.js"></script>
-<script src="js/main.js"></script>
+<script>var _appVer = Date.now();</script>
+<script src="js/modules/database.js?v=3"></script>
+<script src="js/modules/utils.js?v=3"></script>
+<script src="js/modules/debug.js?v=3"></script>
+<script src="js/modules/nfo-parser.js?v=3"></script>
+<script src="js/modules/scanner.js?v=3"></script>
+<script src="js/modules/ui-renderer.js?v=3"></script>
+<script src="js/modules/detail-page.js?v=3"></script>
+<script src="js/modules/video-player.js?v=3"></script>
+<script src="js/modules/theme.js?v=3"></script>
+<script src="js/modules/folder-ops.js?v=3"></script>
+<script src="js/modules/collections.js?v=3"></script>
+<script src="js/modules/favorites.js?v=3"></script>
+<script src="js/modules/watch-history.js?v=3"></script>
+<script src="js/modules/playlist.js?v=3"></script>
+<script src="js/modules/stats.js?v=3"></script>
+<script src="js/modules/export.js?v=3"></script>
+<script src="js/modules/duplicate-finder.js?v=3"></script>
+<script src="js/modules/playback-resume.js?v=3"></script>
+<script src="js/main.js?v=3"></script>
+
+<!-- Service Worker Registration -->
+<script>
+if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/bilko/sw.js').then(function(reg) {
+      console.log('[PWA] Service Worker registered, scope:', reg.scope);
+    }).catch(function(err) {
+      console.warn('[PWA] Service Worker registration failed:', err);
+    });
+  });
+}
+</script>
+
+<!-- Footer -->
+<footer class="app-footer">
+  <svg width="16" height="16" viewBox="0 0 40 40" fill="none"><rect x="2" y="2" width="36" height="36" rx="8" fill="var(--accent)" opacity=".2"/><polygon points="16,10 16,30 32,20" fill="var(--accent)"/></svg>
+  <span>Media Library</span>
+  <span>&bull;</span>
+  <span>Built with File System Access API</span>
+  <span>&bull;</span>
+  <span id="footerStats"></span>
+</footer>
+</div>
 </body>
 </html>

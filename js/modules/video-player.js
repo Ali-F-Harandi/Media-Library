@@ -1,9 +1,12 @@
 /**
- * Movie Library - Professional Video Player Module (v2.0)
+ * Movie Library - Professional Video Player Module (v3.0)
  * 
  * Advanced HTML5 video player with professional features:
  * - Multi-audio track support (switch between different languages/commentary tracks)
  * - Multi-subtitle support (embedded + external SRT/VTT/ASS files)
+ * - Subtitle delay adjustment (sync subtitles that are early/late)
+ * - Subtitle font size control (Small/Medium/Large) with localStorage persistence
+ * - Audio track fallback for Chrome (shows info message when API unavailable)
  * - Playback speed control (0.5x to 2x)
  * - Picture-in-Picture (PiP) mode
  * - Fullscreen support
@@ -11,12 +14,13 @@
  * - Real-time display with auto-hide controls
  * - SRT to VTT conversion for browser compatibility
  * - Language auto-detection from filenames
- * - Keyboard shortcuts for quick access
+ * - Keyboard shortcuts for quick access (C/A/F/M/Shift+arrows)
+ * - Subtitle file drag-and-drop support
  * 
  * Requirements: Chrome/Edge for File System Access API & audioTracks support
  * 
  * @module VideoPlayer
- * @version 2.0
+ * @version 3.0
  * @author Movie Library Team
  */
 
@@ -38,6 +42,117 @@ var controlBarInterval = null;
 
 /** Cache for converted subtitle data to avoid re-processing */
 var loadedSubtitleFiles = new Map();
+
+// ============================================================================
+// SUBTITLE DELAY & SIZE STATE
+// ============================================================================
+
+/** Current subtitle delay offset in seconds (positive = subtitles appear later) */
+var subtitleDelayOffset = 0;
+
+/** Original VTT content before delay adjustment (for re-applying delay) */
+var originalSubtitleVtt = null;
+
+/** Current subtitle track label for re-applying delay */
+var currentSubtitleLabel = '';
+
+/** Current subtitle srclang for re-applying delay */
+var currentSubtitleSrclang = '';
+
+/** LocalStorage key for persisting preferred subtitle size */
+var SUBTITLE_SIZE_KEY = 'movieLibSubtitleSize';
+
+/** Available subtitle size options */
+var subtitleSizeOptions = ['small', 'medium', 'large'];
+
+/** Current subtitle size index (default 1 = medium) */
+var currentSubtitleSizeIndex = 1;
+
+/** Dynamically injected style element for ::cue font size */
+var subtitleCueStyleEl = null;
+
+// Load saved subtitle size on module load
+(function initSubtitleSize() {
+    var saved = localStorage.getItem(SUBTITLE_SIZE_KEY);
+    if (saved) {
+        var idx = subtitleSizeOptions.indexOf(saved);
+        if (idx !== -1) {
+            currentSubtitleSizeIndex = idx;
+        }
+    }
+    // Apply saved size
+    applySubtitleSize(subtitleSizeOptions[currentSubtitleSizeIndex]);
+})();
+
+/** Whether audio tracks are available in this browser */
+var audioTracksAvailable = false;
+
+// ============================================================================
+// PLAYBACK SPEED CONTROL
+// ============================================================================
+
+/** LocalStorage key for persisting preferred playback speed */
+var SPEED_KEY = 'movieLibPlaybackSpeed';
+
+/** Available playback speed options */
+var playbackSpeeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+/** Current playback speed index in the speeds array */
+var currentSpeedIndex = 2; // Default 1x
+
+// Load saved speed on module load
+(function initPlaybackSpeed() {
+    var saved = localStorage.getItem(SPEED_KEY);
+    if (saved) {
+        var speed = parseFloat(saved);
+        var idx = playbackSpeeds.indexOf(speed);
+        if (idx !== -1) {
+            currentSpeedIndex = idx;
+        }
+    }
+})();
+
+/**
+ * Cycle to the next playback speed
+ * Saves preference to localStorage and applies to video element
+ */
+window.cyclePlaybackSpeed = function() {
+    currentSpeedIndex = (currentSpeedIndex + 1) % playbackSpeeds.length;
+    var speed = playbackSpeeds[currentSpeedIndex];
+    localStorage.setItem(SPEED_KEY, speed.toString());
+
+    // Apply to video element
+    var video = document.getElementById('videoPlayer');
+    if (video) {
+        video.playbackRate = speed;
+    }
+
+    // Update button text
+    var btn = document.getElementById('speedControlBtn');
+    if (btn) {
+        btn.textContent = speed + 'x';
+        btn.classList.toggle('active', speed !== 1);
+    }
+
+    window.Utils.showToast('Speed: ' + speed + 'x', 'info');
+};
+
+/**
+ * Apply the saved playback speed to a video element
+ * Called when a new video starts playing
+ */
+function applySavedSpeed(video) {
+    if (!video) return;
+    var speed = playbackSpeeds[currentSpeedIndex];
+    video.playbackRate = speed;
+
+    // Update button text
+    var btn = document.getElementById('speedControlBtn');
+    if (btn) {
+        btn.textContent = speed + 'x';
+        btn.classList.toggle('active', speed !== 1);
+    }
+}
 
 // ============================================================================
 // TV SHOW PLAYBACK STATE
@@ -129,6 +244,469 @@ function extractLanguageFromFilename(filename) {
 }
 
 // ============================================================================
+// SUBTITLE DELAY ADJUSTMENT
+// ============================================================================
+
+/**
+ * Apply a time delay offset to VTT subtitle timestamps
+ * Adjusts all timestamp pairs by the specified number of seconds
+ * 
+ * @param {string} vttContent - VTT subtitle content with WEBVTT header
+ * @param {number} delaySeconds - Delay in seconds (positive = later, negative = earlier)
+ * @returns {string} VTT content with adjusted timestamps
+ */
+function applySubtitleDelay(vttContent, delaySeconds) {
+    return vttContent.replace(/(\d{2}):(\d{2}):(\d{2})\.(\d{3})/g, function(match, h, m, s, ms) {
+        var totalMs = (parseInt(h, 10) * 3600 + parseInt(m, 10) * 60 + parseInt(s, 10)) * 1000 + parseInt(ms, 10);
+        totalMs += delaySeconds * 1000;
+        if (totalMs < 0) totalMs = 0;
+        var newH = Math.floor(totalMs / 3600000);
+        var newM = Math.floor((totalMs % 3600000) / 60000);
+        var newS = Math.floor((totalMs % 60000) / 1000);
+        var newMs = Math.round(totalMs % 1000);
+        return String(newH).padStart(2, '0') + ':' + 
+               String(newM).padStart(2, '0') + ':' + 
+               String(newS).padStart(2, '0') + '.' + 
+               String(newMs).padStart(3, '0');
+    });
+}
+
+/**
+ * Adjust subtitle delay and re-apply to the current subtitle track
+ * Called from the UI buttons (+/- 0.5s) and keyboard shortcuts
+ * 
+ * @param {number} seconds - Number of seconds to adjust (typically ±0.5)
+ */
+window.adjustSubtitleDelay = function(seconds) {
+    subtitleDelayOffset += seconds;
+    subtitleDelayOffset = Math.round(subtitleDelayOffset * 10) / 10; // Avoid floating point drift
+    
+    // Update delay display in menu
+    var delayDisplay = document.getElementById('subtitleDelayValue');
+    if (delayDisplay) {
+        var sign = subtitleDelayOffset >= 0 ? '+' : '';
+        delayDisplay.textContent = sign + subtitleDelayOffset.toFixed(1) + 's';
+    }
+    
+    // Re-apply subtitle with new delay if we have original content
+    if (originalSubtitleVtt) {
+        var delayedVtt = applySubtitleDelay(originalSubtitleVtt, subtitleDelayOffset);
+        var video = document.getElementById('videoPlayer');
+        if (video) {
+            // Remove existing track elements
+            while (video.firstChild && video.firstChild.tagName === 'TRACK') {
+                video.removeChild(video.firstChild);
+            }
+            
+            var blob = new Blob([delayedVtt], { type: 'text/vtt' });
+            var url = URL.createObjectURL(blob);
+            var track = document.createElement('track');
+            track.kind = 'subtitles';
+            track.label = currentSubtitleLabel;
+            track.srclang = currentSubtitleSrclang;
+            track.src = url;
+            track.default = true;
+            video.appendChild(track);
+            
+            track.addEventListener('load', function() {
+                var tracks = video.textTracks;
+                for (var i = 0; i < tracks.length; i++) {
+                    tracks[i].mode = tracks[i] === track ? 'showing' : 'disabled';
+                }
+            });
+        }
+    }
+    
+    var sign = subtitleDelayOffset >= 0 ? '+' : '';
+    showPlayerToast('Subtitle Delay: ' + sign + subtitleDelayOffset.toFixed(1) + 's');
+};
+
+// ============================================================================
+// SUBTITLE FONT SIZE CONTROL
+// ============================================================================
+
+/**
+ * Apply subtitle font size via a dynamically injected style element
+ * Uses the ::cue CSS selector to control text track rendering
+ * 
+ * @param {string} size - Size option: 'small', 'medium', or 'large'
+ */
+function applySubtitleSize(size) {
+    if (!subtitleCueStyleEl) {
+        subtitleCueStyleEl = document.createElement('style');
+        subtitleCueStyleEl.id = 'subtitleCueStyle';
+        document.head.appendChild(subtitleCueStyleEl);
+    }
+    
+    var fontSizes = {
+        'small': '0.8em',
+        'medium': '1.2em',
+        'large': '1.8em'
+    };
+    
+    var fontSize = fontSizes[size] || fontSizes['medium'];
+    subtitleCueStyleEl.textContent = 'video::cue { font-size: ' + fontSize + '; }';
+    
+    // Update indicator in player header
+    var indicator = document.getElementById('subtitleSizeIndicator');
+    if (indicator) {
+        indicator.textContent = size.charAt(0).toUpperCase() + size.slice(1);
+    }
+    
+    // Update active state in dropdown
+    var items = document.querySelectorAll('.subtitle-size-btn');
+    items.forEach(function(item) {
+        item.classList.toggle('active', item.dataset.size === size);
+    });
+}
+
+/**
+ * Set subtitle size, persist to localStorage, and apply
+ * 
+ * @param {string} size - Size option: 'small', 'medium', or 'large'
+ */
+window.setSubtitleSize = function(size) {
+    var idx = subtitleSizeOptions.indexOf(size);
+    if (idx !== -1) {
+        currentSubtitleSizeIndex = idx;
+        localStorage.setItem(SUBTITLE_SIZE_KEY, size);
+        applySubtitleSize(size);
+        showPlayerToast('Subtitle Size: ' + size.charAt(0).toUpperCase() + size.slice(1));
+    }
+};
+
+// ============================================================================
+// PLAYER TOAST (for keyboard shortcut hints)
+// ============================================================================
+
+/**
+ * Show a brief toast notification specific to the player
+ * Uses the global Utils.showToast if available, otherwise creates a fallback
+ * 
+ * @param {string} message - Message to display
+ */
+function showPlayerToast(message) {
+    if (window.Utils && typeof window.Utils.showToast === 'function') {
+        window.Utils.showToast(message, 'info');
+    }
+}
+
+// ============================================================================
+// KEYBOARD SHORTCUTS
+// ============================================================================
+
+/**
+ * Setup keyboard shortcuts for the video player
+ * Only active when the player modal is visible
+ * Shortcuts: C=subtitle cycle, A=audio cycle, F=fullscreen, M=mute
+ *            Shift+Left/Right=seek ±30s, Shift+Up/Down=subtitle delay ±0.5s
+ */
+function setupPlayerKeyboardShortcuts() {
+    // Remove existing listener to avoid duplicates
+    document.removeEventListener('keydown', playerKeydownHandler);
+    document.addEventListener('keydown', playerKeydownHandler);
+}
+
+/**
+ * Global keydown handler for player keyboard shortcuts
+ * Checks if player modal is active before processing shortcuts
+ */
+function playerKeydownHandler(e) {
+    var modal = document.getElementById('playerModal');
+    if (!modal || !modal.classList.contains('active')) return;
+    
+    // Don't intercept when typing in input fields
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    
+    var video = document.getElementById('videoPlayer');
+    if (!video) return;
+    
+    var key = e.key;
+    
+    if (key === 'c' || key === 'C') {
+        e.preventDefault();
+        cycleSubtitles();
+    } else if (key === 'a' || key === 'A') {
+        e.preventDefault();
+        cycleAudioTracks();
+    } else if (key === 'f' || key === 'F') {
+        e.preventDefault();
+        togglePlayerFullscreen();
+    } else if (key === 'm' || key === 'M') {
+        e.preventDefault();
+        togglePlayerMute();
+    } else if (key === 'ArrowLeft' && e.shiftKey) {
+        e.preventDefault();
+        video.currentTime = Math.max(0, video.currentTime - 30);
+        showPlayerToast('-30s');
+    } else if (key === 'ArrowRight' && e.shiftKey) {
+        e.preventDefault();
+        video.currentTime = Math.min(video.duration || 0, video.currentTime + 30);
+        showPlayerToast('+30s');
+    } else if (key === 'ArrowUp' && e.shiftKey) {
+        e.preventDefault();
+        window.adjustSubtitleDelay(-0.5);
+    } else if (key === 'ArrowDown' && e.shiftKey) {
+        e.preventDefault();
+        window.adjustSubtitleDelay(0.5);
+    }
+}
+
+/**
+ * Cycle through available subtitles then off
+ * Pressing C repeatedly cycles: subtitle1 -> subtitle2 -> ... -> off -> subtitle1
+ */
+function cycleSubtitles() {
+    var video = document.getElementById('videoPlayer');
+    if (!video) return;
+    
+    var tracks = video.textTracks;
+    var subtitleTracks = [];
+    
+    for (var i = 0; i < tracks.length; i++) {
+        if (tracks[i].kind === 'subtitles') {
+            subtitleTracks.push(i);
+        }
+    }
+    
+    if (subtitleTracks.length === 0) {
+        showPlayerToast('No subtitles available');
+        return;
+    }
+    
+    // Find current active subtitle track
+    var activeIdx = -1;
+    for (var j = 0; j < subtitleTracks.length; j++) {
+        if (tracks[subtitleTracks[j]].mode === 'showing') {
+            activeIdx = j;
+            break;
+        }
+    }
+    
+    // Cycle to next subtitle, or turn off if at the end
+    var nextIdx = activeIdx + 1;
+    if (nextIdx >= subtitleTracks.length) {
+        // Turn off all subtitles
+        for (var k = 0; k < tracks.length; k++) {
+            tracks[k].mode = 'disabled';
+        }
+        showPlayerToast('Subtitles: Off');
+    } else {
+        // Disable all, then enable the next one
+        for (var k = 0; k < tracks.length; k++) {
+            tracks[k].mode = 'disabled';
+        }
+        tracks[subtitleTracks[nextIdx]].mode = 'showing';
+        var label = tracks[subtitleTracks[nextIdx]].label || ('Track ' + (nextIdx + 1));
+        showPlayerToast('Subtitles: ' + label);
+    }
+}
+
+/**
+ * Cycle through available audio tracks
+ */
+function cycleAudioTracks() {
+    var video = window.currentVideoElement || document.getElementById('videoPlayer');
+    if (!video || !video.audioTracks) {
+        showPlayerToast('Audio tracks not available in this browser');
+        return;
+    }
+    
+    var audioTracks = video.audioTracks;
+    if (audioTracks.length <= 1) {
+        showPlayerToast('Only one audio track available');
+        return;
+    }
+    
+    // Find current enabled track
+    var currentIdx = 0;
+    for (var i = 0; i < audioTracks.length; i++) {
+        if (audioTracks[i].enabled) {
+            currentIdx = i;
+            break;
+        }
+    }
+    
+    // Cycle to next track
+    var nextIdx = (currentIdx + 1) % audioTracks.length;
+    for (var j = 0; j < audioTracks.length; j++) {
+        audioTracks[j].enabled = (j === nextIdx);
+    }
+    
+    // Update UI
+    var items = document.querySelectorAll('#audioList .player-dropdown-item');
+    items.forEach(function(item, idx) {
+        item.classList.toggle('active', idx === nextIdx);
+    });
+    
+    var trackName = audioTracks[nextIdx].label || audioTracks[nextIdx].language || 'Track ' + (nextIdx + 1);
+    showPlayerToast('Audio: ' + trackName);
+}
+
+/**
+ * Toggle fullscreen mode for the player
+ */
+function togglePlayerFullscreen() {
+    var container = document.querySelector('.player-container');
+    if (!container) return;
+    
+    if (document.fullscreenElement) {
+        document.exitFullscreen();
+        showPlayerToast('Exit Fullscreen');
+    } else {
+        container.requestFullscreen().catch(function() {});
+        showPlayerToast('Fullscreen');
+    }
+}
+
+/**
+ * Toggle mute on the video player
+ */
+function togglePlayerMute() {
+    var video = document.getElementById('videoPlayer');
+    if (!video) return;
+    
+    video.muted = !video.muted;
+    showPlayerToast(video.muted ? 'Muted' : 'Unmuted');
+}
+
+// ============================================================================
+// SUBTITLE DRAG-AND-DROP
+// ============================================================================
+
+/**
+ * Setup drag-and-drop event listeners on the player modal
+ * Allows dropping .srt and .vtt files to load as subtitles
+ */
+function setupSubtitleDragDrop() {
+    var modal = document.getElementById('playerModal');
+    if (!modal) return;
+    
+    // Remove existing listeners to avoid duplicates
+    modal.removeEventListener('dragover', handleDragOver);
+    modal.removeEventListener('dragleave', handleDragLeave);
+    modal.removeEventListener('drop', handleSubtitleDrop);
+    
+    modal.addEventListener('dragover', handleDragOver);
+    modal.addEventListener('dragleave', handleDragLeave);
+    modal.addEventListener('drop', handleSubtitleDrop);
+}
+
+/**
+ * Handle dragover event - prevent default and show visual indicator
+ */
+function handleDragOver(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var modal = document.getElementById('playerModal');
+    if (modal) {
+        modal.classList.add('subtitle-drag-over');
+    }
+}
+
+/**
+ * Handle dragleave event - remove visual indicator
+ */
+function handleDragLeave(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var modal = document.getElementById('playerModal');
+    if (modal) {
+        modal.classList.remove('subtitle-drag-over');
+    }
+}
+
+/**
+ * Handle drop event - read dropped subtitle file and load it
+ */
+function handleSubtitleDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    var modal = document.getElementById('playerModal');
+    if (modal) {
+        modal.classList.remove('subtitle-drag-over');
+    }
+    
+    var files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+    
+    var file = files[0];
+    var lowerName = file.name.toLowerCase();
+    
+    // Check if it's a subtitle file
+    var validExts = ['.srt', '.vtt', '.ass', '.ssa', '.sub'];
+    var isSubtitle = validExts.some(function(ext) { return lowerName.endsWith(ext); });
+    
+    if (!isSubtitle) {
+        showPlayerToast('Please drop a subtitle file (.srt, .vtt, .ass, .ssa, .sub)');
+        return;
+    }
+    
+    handleSubtitleFileLoad(file);
+}
+
+/**
+ * Load a subtitle file (from drag-drop or file picker) into the video player
+ * 
+ * @param {File} file - The subtitle file to load
+ */
+async function handleSubtitleFileLoad(file) {
+    try {
+        var content = await file.text();
+        var lang = extractLanguageFromFilename(file.name);
+        
+        // Convert if needed
+        var lowerName = file.name.toLowerCase();
+        var blobContent = content;
+        if (lowerName.endsWith('.srt')) {
+            blobContent = convertSrtToVtt(content);
+        } else if (lowerName.endsWith('.ass') || lowerName.endsWith('.ssa')) {
+            showPlayerToast('ASS/SSA subtitles may not display correctly');
+            blobContent = convertSrtToVtt(content);
+        }
+        
+        // Store original VTT for delay adjustment
+        originalSubtitleVtt = blobContent;
+        currentSubtitleLabel = lang;
+        currentSubtitleSrclang = lang.toLowerCase().split(' ')[0].toLowerCase();
+        
+        // Apply delay if set
+        if (subtitleDelayOffset !== 0) {
+            blobContent = applySubtitleDelay(blobContent, subtitleDelayOffset);
+        }
+        
+        // Apply to video
+        var video = document.getElementById('videoPlayer');
+        while (video.firstChild && video.firstChild.tagName === 'TRACK') {
+            video.removeChild(video.firstChild);
+        }
+        
+        var blob = new Blob([blobContent], { type: 'text/vtt' });
+        var url = URL.createObjectURL(blob);
+        var track = document.createElement('track');
+        track.kind = 'subtitles';
+        track.label = currentSubtitleLabel;
+        track.srclang = currentSubtitleSrclang;
+        track.src = url;
+        track.default = true;
+        video.appendChild(track);
+        
+        track.addEventListener('load', function() {
+            var tracks = video.textTracks;
+            for (var i = 0; i < tracks.length; i++) {
+                tracks[i].mode = (tracks[i] === track.track) ? 'showing' : 'disabled';
+            }
+        });
+        
+        showPlayerToast('Loaded subtitle: ' + lang);
+    } catch(e) {
+        console.error('[VideoPlayer Debug] Error loading dropped subtitle:', e);
+        showPlayerToast('Failed to load subtitle: ' + e.message);
+    }
+}
+
+// ============================================================================
 // CORE PLAYER FUNCTIONS
 // ============================================================================
 
@@ -176,6 +754,19 @@ async function playMovie(idx) {
             
             console.log('[VideoPlayer Debug] Web player initialized');
             window.Utils.showToast('Playing ' + m.title, 'success');
+            
+            // Record watch history
+            if (typeof window.recordWatch === 'function') {
+                window.recordWatch(m.title, 'movie', { year: m.year, quality: m.quality });
+            }
+            
+            // Offer to resume from saved position
+            if (typeof window.offerResumePlayback === 'function') {
+                var resumeVideo = document.getElementById('videoPlayer');
+                if (resumeVideo) {
+                    window.offerResumePlayback(m.title, resumeVideo);
+                }
+            }
         } else {
             // Handle case where file handle is not available (permission issue)
             console.error('[VideoPlayer Debug] videoHandle or getFile method not available');
@@ -211,8 +802,26 @@ async function setupWebPlayer(movie, videoUrl) {
     // Show the player modal by adding active class
     modal.classList.add('active');
     
+    // Reset subtitle delay for new video
+    subtitleDelayOffset = 0;
+    originalSubtitleVtt = null;
+    
+    // Ensure audio button is always visible
+    ensureAudioButtonExists();
+    
     // Scan folder and load available subtitle files
     await loadSubtitlesForMovie(movie, video);
+    
+    // Setup playback resume listeners (timeupdate, ended, pause)
+    if (typeof window.setupPlaybackResumeListeners === 'function') {
+        window.setupPlaybackResumeListeners(video, movie.title);
+    }
+    
+    // Setup drag-and-drop for subtitles
+    setupSubtitleDragDrop();
+    
+    // Setup keyboard shortcuts
+    setupPlayerKeyboardShortcuts();
     
     // Setup event listeners for video lifecycle events
     video.onloadedmetadata = function() {
@@ -223,6 +832,9 @@ async function setupWebPlayer(movie, videoUrl) {
         
         // Auto-play the video (may be prevented by browser autoplay policies)
         video.play().catch(e => console.log('[VideoPlayer Debug] Auto-play prevented:', e));
+        
+        // Apply saved playback speed
+        applySavedSpeed(video);
     };
     
     // Handle video loading errors
@@ -230,6 +842,71 @@ async function setupWebPlayer(movie, videoUrl) {
         console.error('[VideoPlayer Debug] Video error:', e);
         window.Utils.showToast('Error loading video', 'warning');
     };
+}
+
+/**
+ * Ensure the audio track button always exists in the player header
+ * Creates it with a dimmed state if audio tracks API is not available
+ */
+function ensureAudioButtonExists() {
+    var menuContainer = document.getElementById('audioMenuContainer');
+    if (menuContainer) return; // Already exists
+    
+    var playerHeader = document.querySelector('.player-header');
+    if (!playerHeader) return;
+    
+    menuContainer = document.createElement('div');
+    menuContainer.id = 'audioMenuContainer';
+    menuContainer.className = 'player-subtitle-menu';
+    menuContainer.innerHTML = 
+        '<div class="player-control-group">' +
+            '<button class="player-control-btn" id="audioBtn" onclick="toggleAudioMenu()">' +
+                '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                    '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>' +
+                    '<path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>' +
+                '</svg>' +
+                '<span>Audio</span>' +
+            '</button>' +
+            '<div class="player-dropdown" id="audioDropdown">' +
+                '<div id="audioList"></div>' +
+            '</div>' +
+        '</div>';
+    playerHeader.appendChild(menuContainer);
+    
+    // Check audioTracks API availability and set initial state
+    var video = document.getElementById('videoPlayer');
+    if (!video || !video.audioTracks) {
+        // Audio tracks not available - show dimmed button with info message
+        audioTracksAvailable = false;
+        var btn = document.getElementById('audioBtn');
+        if (btn) btn.classList.add('disabled');
+        var list = document.getElementById('audioList');
+        if (list) {
+            list.innerHTML = '<div class="player-dropdown-info">Audio track switching not supported in this browser. Try Safari or Edge.</div>';
+        }
+    } else {
+        audioTracksAvailable = true;
+    }
+    
+    // Update audio track indicator
+    updateAudioTrackIndicator();
+}
+
+/**
+ * Update the audio track indicator in the player header
+ */
+function updateAudioTrackIndicator() {
+    var indicator = document.getElementById('audioTrackIndicator');
+    if (!indicator) return;
+    
+    var video = window.currentVideoElement || document.getElementById('videoPlayer');
+    if (video && video.audioTracks && video.audioTracks.length > 1) {
+        indicator.textContent = video.audioTracks.length + ' tracks';
+    } else if (video && video.audioTracks) {
+        indicator.textContent = '1 track';
+    } else {
+        indicator.textContent = 'N/A';
+    }
 }
 
 /**
@@ -241,14 +918,29 @@ async function setupWebPlayer(movie, videoUrl) {
 function checkAudioTracks(video) {
     // Wait a bit for tracks to be available (browser needs time to parse audio streams)
     setTimeout(function() {
-        const audioTracks = video.audioTracks;
-        // Only show audio selector if multiple tracks exist (e.g., different languages)
-        if (audioTracks && audioTracks.length > 1) {
-            console.log('[VideoPlayer Debug] Found', audioTracks.length, 'audio tracks');
-            updateAudioMenu(audioTracks, video);
+        if (video.audioTracks && video.audioTracks.length > 1) {
+            console.log('[VideoPlayer Debug] Found', video.audioTracks.length, 'audio tracks');
+            audioTracksAvailable = true;
+            updateAudioMenu(video.audioTracks, video);
+        } else if (!video.audioTracks) {
+            // audioTracks API not supported (Chrome) - show fallback message
+            console.log('[VideoPlayer Debug] audioTracks API not available in this browser');
+            audioTracksAvailable = false;
+            var btn = document.getElementById('audioBtn');
+            if (btn) btn.classList.add('disabled');
+            var list = document.getElementById('audioList');
+            if (list) {
+                list.innerHTML = '<div class="player-dropdown-info">Audio track switching not supported in this browser. Try Safari or Edge.</div>';
+            }
         } else {
             console.log('[VideoPlayer Debug] Single or no audio tracks found');
+            audioTracksAvailable = true;
+            var list = document.getElementById('audioList');
+            if (list) {
+                list.innerHTML = '<div class="player-dropdown-info">Only one audio track available.</div>';
+            }
         }
+        updateAudioTrackIndicator();
     }, 500);
 }
 
@@ -260,35 +952,15 @@ function checkAudioTracks(video) {
  * @param {HTMLVideoElement} videoElement - Reference to the video element
  */
 function updateAudioMenu(audioTracks, videoElement) {
-    // Check if audio menu container already exists
-    let menuContainer = document.getElementById('audioMenuContainer');
-    
-    if (!menuContainer) {
-        // Create audio menu container and append to player header
-        const playerHeader = document.querySelector('.player-header');
-        menuContainer = document.createElement('div');
-        menuContainer.id = 'audioMenuContainer';
-        menuContainer.className = 'player-subtitle-menu';
-        menuContainer.innerHTML = `
-            <div class="player-control-group">
-                <button class="player-control-btn" id="audioBtn" onclick="toggleAudioMenu()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
-                    </svg>
-                    <span>Audio</span>
-                </button>
-                <div class="player-dropdown" id="audioDropdown">
-                    <div id="audioList"></div>
-                </div>
-            </div>
-        `;
-        playerHeader.appendChild(menuContainer);
-    }
+    // Ensure audio button exists
+    ensureAudioButtonExists();
     
     // Get references to dropdown elements
     const list = document.getElementById('audioList');
     const btn = document.getElementById('audioBtn');
+    
+    // Remove disabled state
+    if (btn) btn.classList.remove('disabled');
     
     // Build HTML for audio track list
     let html = '';
@@ -366,10 +1038,11 @@ async function loadSubtitlesForMovie(movie, videoElement) {
     console.log('[VideoPlayer Debug] Loading subtitles for:', movie.title);
     
     try {
-        // Get parent directory handle to scan for subtitle files
-        const parentDir = movie.videoHandle.parent;
-        if (!parentDir) {
-            console.log('[VideoPlayer Debug] No parent directory access');
+        // Use the folderHandle stored on the movie object for subtitle scanning
+        // (videoHandle.parent doesn't exist in the File System Access API)
+        const folderDir = movie.folderHandle;
+        if (!folderDir) {
+            console.log('[VideoPlayer Debug] No folder handle available for subtitle scan');
             updateSubtitleMenu([]);
             return;
         }
@@ -378,17 +1051,23 @@ async function loadSubtitlesForMovie(movie, videoElement) {
         const subtitleExts = ['.srt', '.vtt', '.ass', '.ssa', '.sub'];
         const subtitleFiles = [];
         
-        // Scan all files in the parent directory
-        for await (const entry of parentDir.values()) {
+        // Scan all files in the movie folder for subtitles
+        for await (const entry of folderDir.values()) {
             if (entry.kind !== 'file') continue;
             const lowerName = entry.name.toLowerCase();
             
             // Check if file is a subtitle format and belongs to this movie
             const isSubtitle = subtitleExts.some(ext => lowerName.endsWith(ext));
-            const isRelated = lowerName.includes(movie.title.toLowerCase().replace(/[^a-z0-9]/g, '')) ||
-                             lowerName.includes(movie.fileName.toLowerCase().replace(/\.[^.]+$/, ''));
+            // Match subtitles that share the movie title or video filename
+            const movieTitleClean = movie.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const videoBaseName = movie.fileName.toLowerCase().replace(/\.[^.]+$/, '');
+            const isRelated = lowerName.includes(movieTitleClean) ||
+                             lowerName.includes(videoBaseName) ||
+                             // Also match generic subtitle names (e.g., movie.srt, eng.srt)
+                             lowerName.replace(/\.[^.]+$/, '').endsWith('.srt') === false;
             
-            if (isSubtitle && isRelated) {
+            if (isSubtitle) {
+                // Include all subtitle files in the folder (user can select the right one)
                 subtitleFiles.push(entry);
             }
         }
@@ -404,7 +1083,9 @@ async function loadSubtitlesForMovie(movie, videoElement) {
 
 /**
  * Create or update the subtitle selection dropdown menu
- * Shows "No Subtitles" option plus all detected subtitle files with language names
+ * Shows "No Subtitles" option, detected subtitle files, delay adjustment,
+ * font size control, and external subtitle loading option.
+ * CC button is ALWAYS visible even with 0 subtitles.
  * 
  * @param {FileSystemFileHandle[]} subtitleFiles - Array of subtitle file handles
  */
@@ -418,36 +1099,64 @@ function updateSubtitleMenu(subtitleFiles) {
         menuContainer = document.createElement('div');
         menuContainer.id = 'subtitleMenuContainer';
         menuContainer.className = 'player-subtitle-menu';
-        menuContainer.innerHTML = `
-            <div class="player-control-group">
-                <button class="player-control-btn" id="subtitleBtn" onclick="toggleSubtitleMenu()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="2" y="4" width="20" height="16" rx="2"/>
-                        <line x1="4" y1="8" x2="20" y2="8"/>
-                        <line x1="4" y1="12" x2="14" y2="12"/>
-                    </svg>
-                    <span>CC</span>
-                </button>
-                <div class="player-dropdown" id="subtitleDropdown">
-                    <button class="player-dropdown-item" onclick="disableSubtitles()">No Subtitles</button>
-                    <div id="subtitleList"></div>
-                </div>
-            </div>
-        `;
+        
+        var currentSize = subtitleSizeOptions[currentSubtitleSizeIndex];
+        var delaySign = subtitleDelayOffset >= 0 ? '+' : '';
+        var delayDisplay = delaySign + subtitleDelayOffset.toFixed(1) + 's';
+        
+        menuContainer.innerHTML = 
+            '<div class="player-control-group">' +
+                '<button class="player-control-btn" id="subtitleBtn" onclick="toggleSubtitleMenu()">' +
+                    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                        '<rect x="2" y="4" width="20" height="16" rx="2"/>' +
+                        '<line x1="4" y1="8" x2="20" y2="8"/>' +
+                        '<line x1="4" y1="12" x2="14" y2="12"/>' +
+                    '</svg>' +
+                    '<span>CC</span>' +
+                '</button>' +
+                '<div class="player-dropdown" id="subtitleDropdown">' +
+                    '<button class="player-dropdown-item" onclick="disableSubtitles()">No Subtitles</button>' +
+                    '<div id="subtitleList"></div>' +
+                    '<div class="subtitle-menu-divider"></div>' +
+                    // Subtitle Delay section
+                    '<div class="subtitle-section-label">Subtitle Delay</div>' +
+                    '<div class="subtitle-delay-controls">' +
+                        '<button class="subtitle-delay-btn" onclick="adjustSubtitleDelay(-0.5)" title="Subtitles earlier">-0.5s</button>' +
+                        '<span class="subtitle-delay-value" id="subtitleDelayValue">' + delayDisplay + '</span>' +
+                        '<button class="subtitle-delay-btn" onclick="adjustSubtitleDelay(0.5)" title="Subtitles later">+0.5s</button>' +
+                    '</div>' +
+                    '<div class="subtitle-menu-divider"></div>' +
+                    // Font Size section
+                    '<div class="subtitle-section-label">Subtitle Size</div>' +
+                    '<div class="subtitle-size-controls">' +
+                        '<button class="subtitle-size-btn' + (currentSize === 'small' ? ' active' : '') + '" data-size="small" onclick="setSubtitleSize(\'small\')">S</button>' +
+                        '<button class="subtitle-size-btn' + (currentSize === 'medium' ? ' active' : '') + '" data-size="medium" onclick="setSubtitleSize(\'medium\')">M</button>' +
+                        '<button class="subtitle-size-btn' + (currentSize === 'large' ? ' active' : '') + '" data-size="large" onclick="setSubtitleSize(\'large\')">L</button>' +
+                    '</div>' +
+                    '<div class="subtitle-menu-divider"></div>' +
+                    '<button class="player-dropdown-item subtitle-load-external" onclick="loadExternalSubtitle()">' +
+                        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>' +
+                        'Load External Subtitle' +
+                    '</button>' +
+                '</div>' +
+            '</div>';
         playerHeader.appendChild(menuContainer);
     }
     
     const list = document.getElementById('subtitleList');
-    const dropdown = document.getElementById('subtitleDropdown');
     const btn = document.getElementById('subtitleBtn');
     
-    // Hide if no subtitles
-    if (subtitleFiles.length === 0) {
-        if (btn) btn.style.display = 'none';
-        return;
+    // ALWAYS show the CC button (even with 0 subtitles, user can load external)
+    if (btn) {
+        btn.style.display = 'flex';
+        btn.style.visibility = 'visible';
     }
     
-    if (btn) btn.style.display = 'flex';
+    if (subtitleFiles.length === 0) {
+        // Still show the menu with just "No Subtitles", delay, size, and "Load External" options
+        list.innerHTML = '<div class="player-dropdown-info">No subtitle files found in folder.</div>';
+        return;
+    }
     
     // Build subtitle list
     let html = '';
@@ -460,40 +1169,6 @@ function updateSubtitleMenu(subtitleFiles) {
     
     // Store subtitle files globally for access
     window.currentSubtitleFiles = subtitleFiles;
-}
-
-function extractLanguageFromFilename(filename) {
-    const langPatterns = [
-        /\.([a-z]{2,3})\.(?:srt|vtt|ass|ssa|sub)$/i,
-        /\.([a-z]{2,3})$/i
-    ];
-    
-    for (const pattern of langPatterns) {
-        const match = filename.match(pattern);
-        if (match) {
-            const langCode = match[1].toLowerCase();
-            const langNames = {
-                'en': 'English', 'eng': 'English',
-                'es': 'Spanish', 'spa': 'Spanish',
-                'fr': 'French', 'fra': 'French',
-                'de': 'German', 'deu': 'German',
-                'it': 'Italian', 'ita': 'Italian',
-                'pt': 'Portuguese', 'por': 'Portuguese',
-                'ru': 'Russian', 'rus': 'Russian',
-                'ja': 'Japanese', 'jpn': 'Japanese',
-                'ko': 'Korean', 'kor': 'Korean',
-                'zh': 'Chinese', 'chi': 'Chinese',
-                'ar': 'Arabic', 'ara': 'Arabic',
-                'hi': 'Hindi', 'hin': 'Hindi',
-                'th': 'Thai', 'tha': 'Thai',
-                'vi': 'Vietnamese', 'vie': 'Vietnamese'
-            };
-            return langNames[langCode] || langCode.toUpperCase();
-        }
-    }
-    
-    // Fallback to filename
-    return filename.replace(/\.[^.]+$/, '');
 }
 
 window.toggleSubtitleMenu = function() {
@@ -514,8 +1189,48 @@ window.disableSubtitles = function() {
     while (video.firstChild && video.firstChild.tagName === 'TRACK') {
         video.removeChild(video.firstChild);
     }
-    window.Utils.showToast('Subtitles disabled', 'info');
+    // Clear delay-related state
+    originalSubtitleVtt = null;
+    subtitleDelayOffset = 0;
+    var delayDisplay = document.getElementById('subtitleDelayValue');
+    if (delayDisplay) delayDisplay.textContent = '+0.0s';
+    
+    showPlayerToast('Subtitles disabled');
     toggleSubtitleMenu();
+};
+
+window.loadExternalSubtitle = async function() {
+    try {
+        // Try File System Access API first
+        if (window.showOpenFilePicker) {
+            var handles = await window.showOpenFilePicker({
+                types: [{
+                    description: 'Subtitle files',
+                    accept: { 'text/*': ['.srt', '.vtt', '.ass', '.ssa', '.sub'] }
+                }],
+                multiple: false
+            });
+            var file = await handles[0].getFile();
+            await handleSubtitleFileLoad(file);
+            toggleSubtitleMenu();
+        } else {
+            // Fallback: use file input
+            var input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.srt,.vtt,.ass,.ssa,.sub';
+            input.onchange = async function(e) {
+                var file = e.target.files[0];
+                if (!file) return;
+                await handleSubtitleFileLoad(file);
+                toggleSubtitleMenu();
+            };
+            input.click();
+        }
+    } catch(e) {
+        if (e.name !== 'AbortError') {
+            window.Utils.showToast('Failed to load subtitle: ' + e.message, 'warning');
+        }
+    }
 };
 
 window.loadSubtitle = async function(index, filename) {
@@ -529,20 +1244,42 @@ window.loadSubtitle = async function(index, filename) {
         const video = document.getElementById('videoPlayer');
         const lang = extractLanguageFromFilename(filename);
         
+        // Convert subtitle content based on format
+        var lowerName = filename.toLowerCase();
+        var blobContent = content;
+        if (lowerName.endsWith('.srt')) {
+            // Convert SRT to VTT format for browser compatibility
+            blobContent = convertSrtToVtt(content);
+        } else if (lowerName.endsWith('.ass') || lowerName.endsWith('.ssa')) {
+            // ASS/SSA not fully supported by browsers - try as VTT
+            window.Utils.showToast('ASS/SSA subtitles may not display correctly', 'warning');
+            blobContent = convertSrtToVtt(content); // best effort
+        }
+
+        // Store original VTT for delay adjustment
+        originalSubtitleVtt = blobContent;
+        currentSubtitleLabel = lang;
+        currentSubtitleSrclang = lang.toLowerCase().split(' ')[0].toLowerCase();
+        
+        // Apply delay if set
+        if (subtitleDelayOffset !== 0) {
+            blobContent = applySubtitleDelay(blobContent, subtitleDelayOffset);
+        }
+
         // Remove existing tracks
         while (video.firstChild && video.firstChild.tagName === 'TRACK') {
             video.removeChild(video.firstChild);
         }
-        
-        // Create blob URL for subtitle (convert to VTT format for browser compatibility)
-        const blob = new Blob([content], { type: 'text/vtt' });
+
+        // Create blob URL for subtitle
+        const blob = new Blob([blobContent], { type: 'text/vtt' });
         const url = URL.createObjectURL(blob);
         
         // Create and configure track element
         const track = document.createElement('track');
         track.kind = 'subtitles';
-        track.label = lang;
-        track.srclang = lang.toLowerCase().split(' ')[0].toLowerCase();
+        track.label = currentSubtitleLabel;
+        track.srclang = currentSubtitleSrclang;
         track.src = url;
         track.default = true;
         
@@ -571,6 +1308,22 @@ window.loadSubtitle = async function(index, filename) {
  */
 function closePlayer() {
     var v = document.getElementById('videoPlayer');
+    
+    // If mini-player is active, move video back first
+    if (isMiniPlayerActive && v) {
+        var modal = document.getElementById('playerModal');
+        if (modal) {
+            var playerContainer = modal.querySelector('.player-container');
+            if (playerContainer) {
+                playerContainer.appendChild(v);
+            }
+        }
+        if (miniPlayerEl) {
+            miniPlayerEl.classList.add('hidden');
+        }
+        isMiniPlayerActive = false;
+    }
+    
     if (v) {
         v.pause();
         v.removeAttribute('src');
@@ -578,19 +1331,19 @@ function closePlayer() {
     }
     
     // Clean up subtitle menu container
-    const subtitleMenuContainer = document.getElementById('subtitleMenuContainer');
+    var subtitleMenuContainer = document.getElementById('subtitleMenuContainer');
     if (subtitleMenuContainer) {
         subtitleMenuContainer.remove();
     }
     
     // Clean up audio menu container
-    const audioMenuContainer = document.getElementById('audioMenuContainer');
+    var audioMenuContainer = document.getElementById('audioMenuContainer');
     if (audioMenuContainer) {
         audioMenuContainer.remove();
     }
     
     // Clean up TV show episode navigator if present
-    const tvNavContainer = document.getElementById('tvEpisodeNavContainer');
+    var tvNavContainer = document.getElementById('tvEpisodeNavContainer');
     if (tvNavContainer) {
         tvNavContainer.remove();
     }
@@ -608,6 +1361,22 @@ function closePlayer() {
     currentTVShowMovieIdx = -1;
     currentTVSeasonIdx = -1;
     currentTVEpisodeIdx = -1;
+    
+    // Reset subtitle delay state
+    subtitleDelayOffset = 0;
+    originalSubtitleVtt = null;
+    currentSubtitleLabel = '';
+    currentSubtitleSrclang = '';
+    audioTracksAvailable = false;
+    
+    // Remove drag-over class
+    var playerModal = document.getElementById('playerModal');
+    if (playerModal) {
+        playerModal.classList.remove('subtitle-drag-over');
+    }
+    
+    // Remove keyboard shortcut handler
+    document.removeEventListener('keydown', playerKeydownHandler);
     
     document.getElementById('playerModal').classList.remove('active');
 }
@@ -667,6 +1436,26 @@ async function playTVEpisode(movieIdx, seasonIdx, episodeIdx) {
             setupTVShowPlayer(m, season, episode, currentVideoUrl);
             
             window.Utils.showToast('Playing S' + String(season.seasonNumber).padStart(2, '0') + 'E' + String(episode.episodeNumber).padStart(2, '0') + ' - ' + episode.title, 'success');
+            
+            // Record watch history for TV episode
+            if (typeof window.recordWatch === 'function') {
+                window.recordWatch(m.title, 'episode', { 
+                    year: m.year, 
+                    season: season.seasonNumber, 
+                    episode: episode.episodeNumber, 
+                    episodeTitle: episode.title, 
+                    quality: episode.quality 
+                });
+            }
+            
+            // Offer to resume from saved position
+            var resumeKey = m.title + ' S' + String(season.seasonNumber).padStart(2, '0') + 'E' + String(episode.episodeNumber).padStart(2, '0');
+            if (typeof window.offerResumePlayback === 'function') {
+                var resumeVideo = document.getElementById('videoPlayer');
+                if (resumeVideo) {
+                    window.offerResumePlayback(resumeKey, resumeVideo);
+                }
+            }
         } else {
             window.Utils.showToast('Cannot open episode: File handle not available', 'warning');
         }
@@ -702,17 +1491,39 @@ async function setupTVShowPlayer(show, season, episode, videoUrl) {
     // Show the player modal
     modal.classList.add('active');
     
+    // Reset subtitle delay for new video
+    subtitleDelayOffset = 0;
+    originalSubtitleVtt = null;
+    
+    // Ensure audio button is always visible
+    ensureAudioButtonExists();
+    
     // Load subtitles for this episode
     await loadSubtitlesForTVEpisode(season, episode, video);
     
     // Add TV episode navigator to player
     addTVEpisodeNavigator(show, season, episode);
     
+    // Setup playback resume listeners for TV episode
+    var tvResumeKey = show.title + ' S' + String(season.seasonNumber).padStart(2, '0') + 'E' + String(episode.episodeNumber).padStart(2, '0');
+    if (typeof window.setupPlaybackResumeListeners === 'function') {
+        window.setupPlaybackResumeListeners(video, tvResumeKey);
+    }
+    
+    // Setup drag-and-drop for subtitles
+    setupSubtitleDragDrop();
+    
+    // Setup keyboard shortcuts
+    setupPlayerKeyboardShortcuts();
+    
     // Setup event listeners
     video.onloadedmetadata = function() {
         console.log('[VideoPlayer Debug] Episode loaded, duration:', video.duration);
         checkAudioTracks(video);
         video.play().catch(e => console.log('[VideoPlayer Debug] Auto-play prevented:', e));
+        
+        // Apply saved playback speed
+        applySavedSpeed(video);
     };
     
     video.onerror = function(e) {
@@ -742,112 +1553,66 @@ function addTVEpisodeNavigator(show, season, episode) {
     var hasPrev = false;
     var hasNext = false;
     
-    // Check previous: same season previous episode, or last episode of previous season
-    if (currentTVEpisodeIdx > 0) {
+    // Check previous: same season previous episode
+    if (episode.episodeNumber > 1 && season.episodes.length > 0) {
         hasPrev = true;
-    } else if (currentTVSeasonIdx > 0) {
-        var prevSeason = show.seasonFolders[currentTVSeasonIdx - 1];
-        if (prevSeason && prevSeason.episodes && prevSeason.episodes.length > 0) {
-            hasPrev = true;
-        }
     }
     
-    // Check next: same season next episode, or first episode of next season
-    if (currentTVEpisodeIdx < season.episodes.length - 1) {
-        hasNext = true;
-    } else if (currentTVSeasonIdx < show.seasonFolders.length - 1) {
-        var nextSeason = show.seasonFolders[currentTVSeasonIdx + 1];
-        if (nextSeason && nextSeason.episodes && nextSeason.episodes.length > 0) {
+    // Check next: same season next episode
+    var nextEpIdx = -1;
+    for (var i = 0; i < season.episodes.length; i++) {
+        if (season.episodes[i].episodeNumber === episode.episodeNumber + 1) {
+            nextEpIdx = i;
             hasNext = true;
+            break;
         }
     }
     
     navContainer.innerHTML = 
-        '<div class="player-control-group tv-episode-nav">' +
-            '<button class="player-control-btn tv-ep-nav-btn' + (!hasPrev ? ' disabled' : '') + '" id="tvPrevEpBtn" onclick="playPrevEpisode()">' +
-                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
-                    '<polyline points="15 18 9 12 15 6"/>' +
-                '</svg>' +
-                '<span>Prev Ep</span>' +
-            '</button>' +
-            '<span class="tv-ep-indicator">' + seasonLabel + episodeLabel + '</span>' +
-            '<button class="player-control-btn tv-ep-nav-btn' + (!hasNext ? ' disabled' : '') + '" id="tvNextEpBtn" onclick="playNextEpisode()">' +
-                '<span>Next Ep</span>' +
-                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
-                    '<polyline points="9 18 15 12 9 6"/>' +
-                '</svg>' +
-            '</button>' +
-        '</div>';
+        '<button class="player-control-btn" ' + (!hasPrev ? 'disabled' : '') + ' onclick="playPrevEpisode()" title="Previous Episode">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>' +
+            'Prev' +
+        '</button>' +
+        '<span class="player-nav-label">' + seasonLabel + episodeLabel + '</span>' +
+        '<button class="player-control-btn" ' + (!hasNext ? 'disabled' : '') + ' onclick="playNextEpisode()" title="Next Episode">' +
+            'Next' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>' +
+        '</button>';
     
     playerHeader.appendChild(navContainer);
 }
 
 /**
- * Play the previous episode in the TV show
- * Navigates across season boundaries if needed
+ * Play the previous TV episode
  */
 window.playPrevEpisode = function() {
-    if (!isPlayingTVShow || currentTVShowMovieIdx < 0) return;
-    
+    if (!isPlayingTVShow) return;
     var m = window.filteredMovies[currentTVShowMovieIdx];
-    if (!m) return;
-    
-    var newSeasonIdx = currentTVSeasonIdx;
-    var newEpisodeIdx = currentTVEpisodeIdx - 1;
-    
-    // If at beginning of season, go to last episode of previous season
-    if (newEpisodeIdx < 0) {
-        newSeasonIdx = currentTVSeasonIdx - 1;
-        if (newSeasonIdx < 0) return; // Already at first episode
-        
-        var prevSeason = m.seasonFolders[newSeasonIdx];
-        if (prevSeason && prevSeason.episodes && prevSeason.episodes.length > 0) {
-            newEpisodeIdx = prevSeason.episodes.length - 1;
-        } else {
-            return;
-        }
+    if (!m || !m.seasonFolders[currentTVSeasonIdx]) return;
+    var season = m.seasonFolders[currentTVSeasonIdx];
+    var currentEp = currentTVEpisodeIdx;
+    if (currentEp > 0) {
+        playTVEpisode(currentTVShowMovieIdx, currentTVSeasonIdx, currentEp - 1);
     }
-    
-    playTVEpisode(currentTVShowMovieIdx, newSeasonIdx, newEpisodeIdx);
 };
 
 /**
- * Play the next episode in the TV show
- * Navigates across season boundaries if needed
+ * Play the next TV episode
  */
 window.playNextEpisode = function() {
-    if (!isPlayingTVShow || currentTVShowMovieIdx < 0) return;
-    
+    if (!isPlayingTVShow) return;
     var m = window.filteredMovies[currentTVShowMovieIdx];
-    if (!m) return;
-    
-    var currentSeason = m.seasonFolders[currentTVSeasonIdx];
-    var newSeasonIdx = currentTVSeasonIdx;
-    var newEpisodeIdx = currentTVEpisodeIdx + 1;
-    
-    // If at end of season, go to first episode of next season
-    if (newEpisodeIdx >= currentSeason.episodes.length) {
-        newSeasonIdx = currentTVSeasonIdx + 1;
-        if (newSeasonIdx >= m.seasonFolders.length) return; // Already at last episode
-        
-        var nextSeason = m.seasonFolders[newSeasonIdx];
-        if (nextSeason && nextSeason.episodes && nextSeason.episodes.length > 0) {
-            newEpisodeIdx = 0;
-        } else {
-            return;
-        }
+    if (!m || !m.seasonFolders[currentTVSeasonIdx]) return;
+    var season = m.seasonFolders[currentTVSeasonIdx];
+    var currentEp = currentTVEpisodeIdx;
+    if (currentEp < season.episodes.length - 1) {
+        playTVEpisode(currentTVShowMovieIdx, currentTVSeasonIdx, currentEp + 1);
     }
-    
-    playTVEpisode(currentTVShowMovieIdx, newSeasonIdx, newEpisodeIdx);
 };
 
 /**
- * Load subtitles for a specific TV episode
- * Scans the season folder for subtitle files matching the episode
- * 
- * @param {Object} season - Season data object
- * @param {Object} episode - Episode data object
- * @param {HTMLVideoElement} videoElement - Video element to attach subtitles to
+ * Scan for subtitle files for a TV episode
+ * Checks season subtitle files and season directory
  */
 async function loadSubtitlesForTVEpisode(season, episode, videoElement) {
     console.log('[VideoPlayer Debug] Loading subtitles for episode:', episode.title);
@@ -899,6 +1664,145 @@ async function loadSubtitlesForTVEpisode(season, episode, videoElement) {
         updateSubtitleMenu([]);
     }
 }
+
+// ============================================================================
+// MINI PLAYER MODE
+// ============================================================================
+
+/** Whether the mini-player is currently active */
+var isMiniPlayerActive = false;
+
+/** Reference to the mini-player DOM element */
+var miniPlayerEl = null;
+
+/**
+ * Toggle the mini-player mode
+ * Creates a small floating player window with basic controls
+ */
+window.toggleMiniPlayer = function() {
+    if (isMiniPlayerActive) {
+        closeMiniPlayer();
+        return;
+    }
+    
+    var video = document.getElementById('videoPlayer');
+    if (!video || video.paused) {
+        // Don't create mini player if no video is playing
+        return;
+    }
+    
+    if (!miniPlayerEl) {
+        miniPlayerEl = document.createElement('div');
+        miniPlayerEl.className = 'mini-player entering';
+        miniPlayerEl.innerHTML = '<div class="mini-player-header">' +
+            '<span class="mini-player-title" id="miniPlayerTitle">Now Playing</span>' +
+            '<div class="mini-player-controls">' +
+                '<button class="mini-player-btn" id="miniPlayPauseBtn" onclick="miniPlayerTogglePlay()">' +
+                    '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>' +
+                '</button>' +
+                '<button class="mini-player-btn" onclick="closeMiniPlayer()">' +
+                    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+                '</button>' +
+            '</div>' +
+        '</div>';
+        document.body.appendChild(miniPlayerEl);
+        
+        setTimeout(function() {
+            if (miniPlayerEl) miniPlayerEl.classList.remove('entering');
+        }, 300);
+    }
+    
+    // Update mini player title
+    var miniTitle = document.getElementById('miniPlayerTitle');
+    var playerTitle = document.getElementById('playerTitle');
+    if (miniTitle && playerTitle) {
+        miniTitle.textContent = playerTitle.textContent;
+    }
+    
+    miniPlayerEl.classList.remove('hidden', 'exiting');
+    isMiniPlayerActive = true;
+    
+    // Close the full player modal but keep video playing
+    var modal = document.getElementById('playerModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+};
+
+/**
+ * Close the mini-player and return to full player or stop playback
+ */
+window.closeMiniPlayer = function() {
+    if (!isMiniPlayerActive) return;
+    
+    var video = document.getElementById('videoPlayer');
+    
+    // Move video element back to modal container if needed
+    var modal = document.getElementById('playerModal');
+    if (modal && video) {
+        var playerContainer = modal.querySelector('.player-container');
+        if (playerContainer) {
+            playerContainer.appendChild(video);
+        }
+    }
+    
+    // Hide mini player
+    if (miniPlayerEl) {
+        miniPlayerEl.classList.add('exiting');
+        setTimeout(function() {
+            if (miniPlayerEl) {
+                miniPlayerEl.classList.add('hidden');
+                miniPlayerEl.classList.remove('exiting');
+            }
+        }, 300);
+    }
+    isMiniPlayerActive = false;
+
+    // Close the player normally
+    closePlayer();
+};
+
+/**
+ * Toggle play/pause from the mini-player
+ */
+window.miniPlayerTogglePlay = function() {
+    var video = document.getElementById('videoPlayer');
+    if (!video) return;
+
+    if (video.paused) {
+        video.play().catch(function() {});
+    } else {
+        video.pause();
+    }
+    updateMiniPlayPauseBtn(video);
+};
+
+/**
+ * Update the mini-player play/pause button icon
+ */
+function updateMiniPlayPauseBtn(video) {
+    var btn = document.getElementById('miniPlayPauseBtn');
+    if (!btn || !video) return;
+
+    if (video.paused) {
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+    } else {
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+    }
+}
+
+// Listen for play/pause events on the video to keep mini-player button in sync
+document.addEventListener('DOMContentLoaded', function() {
+    var video = document.getElementById('videoPlayer');
+    if (video) {
+        video.addEventListener('play', function() {
+            if (isMiniPlayerActive) updateMiniPlayPauseBtn(video);
+        });
+        video.addEventListener('pause', function() {
+            if (isMiniPlayerActive) updateMiniPlayPauseBtn(video);
+        });
+    }
+});
 
 // Export VideoPlayer module for use in other parts of the application
 window.VideoPlayer = { 

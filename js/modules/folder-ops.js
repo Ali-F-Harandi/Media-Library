@@ -1,6 +1,40 @@
 // Movie Library - Folder Operations Module
 // Handles folder selection and session management
 
+var ABSOLUTE_PATH_BY_NAME_KEY = 'movieLibAbsolutePathsByName';
+
+/**
+ * Get absolute paths for folders from localStorage (keyed by folder name)
+ * Returns an object mapping folder name to absolute path string
+ */
+window.getAbsolutePathsByName = function() {
+    try {
+        return JSON.parse(localStorage.getItem(ABSOLUTE_PATH_BY_NAME_KEY)) || {};
+    } catch(e) {
+        return {};
+    }
+};
+
+/**
+ * Save absolute path for a specific folder by name
+ * @param {string} folderName - Name of the folder (matches libraryRoot on movie objects)
+ * @param {string} path - Absolute path prefix (e.g. "D:\\Movies\\")
+ */
+window.saveAbsolutePathByName = function(folderName, path) {
+    var paths = window.getAbsolutePathsByName();
+    if (path && path.trim()) {
+        path = path.trim();
+        if (!path.endsWith('/') && !path.endsWith('\\')) {
+            path += '/';
+        }
+        paths[folderName] = path;
+    } else {
+        delete paths[folderName];
+    }
+    localStorage.setItem(ABSOLUTE_PATH_BY_NAME_KEY, JSON.stringify(paths));
+    window.Utils.showToast(path ? 'Absolute path saved for ' + folderName : 'Absolute path cleared for ' + folderName, 'success');
+};
+
 async function selectFolder() {
     if (!window.showDirectoryPicker) {
         window.Utils.showToast('Use Chrome or Edge browser', 'warning');
@@ -57,6 +91,8 @@ async function openManageFolders() {
     
     try {
         var handles = await window.DBUtils.getSetting('folderHandles') || [];
+        var folderNames = await window.DBUtils.getSetting('folderNames') || [];
+        var absPaths = window.getAbsolutePathsByName();
         
         if (handles.length === 0) {
             folderList.innerHTML = '<div class="empty-folders-message">No folders added yet. Click "Add New Folder" to get started.</div>';
@@ -65,9 +101,24 @@ async function openManageFolders() {
             for (var i = 0; i < handles.length; i++) {
                 var handle = handles[i];
                 var name = handle.name || 'Folder ' + (i + 1);
+                // Use stored folder name if available for more context
+                var displayName = folderNames[i] || name;
+                var absPath = absPaths[name] || '';
                 html += '<li class="folder-item">' +
                     '<svg class="folder-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' +
-                    '<span class="folder-item-name">' + window.Utils.escHtml(name) + '</span>' +
+                    '<div class="folder-item-info">' +
+                        '<span class="folder-item-name">' + window.Utils.escHtml(displayName) + '</span>' +
+                        '<span class="folder-item-path">' + window.Utils.escHtml(name) + '</span>' +
+                        '<div class="folder-item-abspath">' +
+                            '<input type="text" class="folder-abspath-input" ' +
+                                'placeholder="e.g. D:\\Movies\\" ' +
+                                'value="' + window.Utils.escHtml(absPath) + '" ' +
+                                'data-folder-name="' + window.Utils.escHtml(name) + '" ' +
+                                'onchange="saveAbsolutePathByName(\'' + name.replace(/'/g, "\\'") + '\', this.value)" ' +
+                                'onkeydown="if(event.key===\'Enter\'){this.blur()}"' +
+                            '/>' +
+                        '</div>' +
+                    '</div>' +
                     '<button class="folder-item-remove" onclick="removeFolder(' + i + ')" title="Remove folder">' +
                         '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>' +
                     '</button>' +
@@ -206,11 +257,21 @@ async function startScanning(dirs) {
     document.getElementById('loadingText').textContent = 'Scanning folders...';
     document.getElementById('loadingProgress').textContent = '';
     
+    // Track recently opened folders
+    if (typeof window.addRecentFolder === 'function') {
+        dirs.forEach(function(dir) {
+            if (dir && dir.name) {
+                window.addRecentFolder(dir.name, dir.name);
+            }
+        });
+    }
+    
     await window.Scanner.scanFolders(dirs);
     
     document.getElementById('loadingOverlay').classList.add('hidden');
     document.getElementById('appContainer').classList.add('active');
     window.UIRenderer.updateStats();
+    if (typeof window.saveWelcomeStats === 'function') window.saveWelcomeStats();
     window.UIRenderer.filterMovies();
     // Render additional tabs
     if (typeof window.UIRenderer.renderAllTab === 'function') window.UIRenderer.renderAllTab();

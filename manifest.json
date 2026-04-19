@@ -1,0 +1,31 @@
+{
+  "name": "Media Library",
+  "short_name": "MediaLib",
+  "description": "Local Media Library Browser",
+  "start_url": "/bilko/index.html",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#e50914",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='32' fill='%230a0a0f'/%3E%3Crect x='16' y='16' width='160' height='160' rx='24' fill='%23e50914' opacity='.15'/%3E%3Cpolygon points='76,48 76,144 144,96' fill='%23e50914'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%230a0a0f'/%3E%3Crect x='40' y='40' width='432' height='432' rx='64' fill='%23e50914' opacity='.15'/%3E%3Cpolygon points='200,128 200,384 384,256' fill='%23e50914'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%230a0a0f'/%3E%3Crect x='40' y='40' width='432' height='432' rx='64' fill='%23e50914' opacity='.15'/%3E%3Cpolygon points='200,128 200,384 384,256' fill='%23e50914'/%3E%3Crect x='40' y='40' width='432' height='432' rx='64' fill='none' stroke='%23e50914' stroke-width='8'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["entertainment", "multimedia"],
+  "orientation": "any"
+}

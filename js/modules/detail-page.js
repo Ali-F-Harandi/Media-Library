@@ -20,6 +20,9 @@ var showDetailPage = async function(idx) {
     var m = window.filteredMovies[idx];
     if (!m) return;
 
+    // Track current index for openContainingFolder
+    window.DetailPage._currentIdx = idx;
+
     // Route to different detail views based on type
     if (m.isTVShow) {
         await showTVShowDetailPage(idx);
@@ -36,13 +39,9 @@ async function showMovieDetailPage(idx) {
     var m = window.filteredMovies[idx];
     if (!m) return;
 
-    // Load poster - revoke old URL before creating new one to prevent memory leaks
+    // Load poster with IndexedDB cache support
     if (!m.posterUrl && m.posterHandle) {
-        try {
-            var f = await m.posterHandle.getFile();
-            if (m.posterUrl) URL.revokeObjectURL(m.posterUrl);
-            m.posterUrl = URL.createObjectURL(f);
-        } catch(e) {}
+        await window.loadPosterForMovie(m);
     }
 
     // Load fanart - revoke old URL before creating new one to prevent memory leaks
@@ -69,7 +68,7 @@ async function showMovieDetailPage(idx) {
 
     var html = '<div class="detail-hero">' +
         '<div class="detail-hero-poster">' +
-            (m.posterUrl ? '<img src="' + m.posterUrl + '">' : 
+            (m.posterUrl ? '<img src="' + m.posterUrl + '" onclick="openLightbox(this.src, \'' + window.Utils.escHtml(m.title).replace(/'/g, "\\'") + '\')" style="cursor:zoom-in">' : 
              '<div class="no-poster-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg></div>') +
         '</div>' +
         '<div class="detail-hero-info">' +
@@ -96,14 +95,37 @@ async function showMovieDetailPage(idx) {
             '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>' +
             'Play Movie' +
         '</button>' +
-        '<button class="detail-secondary-btn" onclick="copyMoviePath(' + idx + ')">' +
+        '<button class="detail-secondary-btn" onclick="copyMoviePath(' + idx + ')" title="Copy full file path to clipboard">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
                 '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>' +
                 '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>' +
             '</svg>' +
             'Copy Path' +
         '</button>' +
-    '</div></div></div>';
+        // Open Folder button
+        '<button class="detail-secondary-btn" onclick="openContainingFolder()" title="Open containing folder">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' +
+            'Open Folder' +
+        '</button>' +
+        // Favorite button
+        (function() { var isFav = window.isFavorite ? window.isFavorite(m.title) : false; return '<button class="detail-secondary-btn detail-fav-btn' + (isFav ? ' favorited' : '') + '" onclick="toggleFavoriteFromDetail(' + idx + ')" title="Toggle favorite">' +
+            '<svg viewBox="0 0 24 24" fill="' + (isFav ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>' +
+            (isFav ? 'Favorited' : 'Favorite') +
+        '</button>'; })() +
+        // Playlist button
+        (function() { var inPL = window.isInPlaylist ? window.isInPlaylist(m.title) : false; return '<button class="detail-secondary-btn detail-playlist-btn' + (inPL ? ' in-playlist' : '') + '" onclick="addToPlaylist(\'' + m.title.replace(/'/g, "\\'") + '\')" title="Add to playlist">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>' +
+            (inPL ? 'In Playlist' : 'Add to Playlist') +
+        '</button>'; })() +
+    '</div>' +
+    // Path display section - shows the path that will be copied
+    '<div class="detail-path-display" title="Click to copy path" onclick="copyMoviePath(' + idx + ')" style="cursor:pointer">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;flex-shrink:0">' +
+            '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>' +
+        '</svg>' +
+        '<span>' + window.Utils.escHtml(m.videoFilePath || m.fullPath || m.relativePath) + '</span>' +
+    '</div>' +
+    '</div></div>';
 
     if (nfo.tagline) {
         html += '<div class="detail-tagline">"' + window.Utils.escHtml(nfo.tagline) + '"</div>';
@@ -169,13 +191,9 @@ async function showTVShowDetailPage(idx) {
     currentTVShowIdx = idx;
     currentSeasonIndex = 0; // Reset to first season
 
-    // Load poster - revoke old URL before creating new one to prevent memory leaks
+    // Load poster with IndexedDB cache support
     if (!m.posterUrl && m.posterHandle) {
-        try {
-            var f = await m.posterHandle.getFile();
-            if (m.posterUrl) URL.revokeObjectURL(m.posterUrl);
-            m.posterUrl = URL.createObjectURL(f);
-        } catch(e) {}
+        await window.loadPosterForMovie(m);
     }
 
     // Load fanart - revoke old URL before creating new one to prevent memory leaks
@@ -203,7 +221,7 @@ async function showTVShowDetailPage(idx) {
     // Build TV Show hero section
     var html = '<div class="detail-hero tvshow-hero">' +
         '<div class="detail-hero-poster tvshow-poster">' +
-            (m.posterUrl ? '<img src="' + m.posterUrl + '">' : 
+            (m.posterUrl ? '<img src="' + m.posterUrl + '" onclick="openLightbox(this.src, \'' + window.Utils.escHtml(m.title).replace(/'/g, "\\'") + '\')" style="cursor:zoom-in">' : 
              '<div class="no-poster-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg></div>') +
         '</div>' +
         '<div class="detail-hero-info tvshow-hero-info">' +
@@ -232,14 +250,37 @@ async function showTVShowDetailPage(idx) {
             '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>' +
             'Play First Episode' +
         '</button>' +
-        '<button class="detail-secondary-btn" onclick="copyMoviePath(' + idx + ')">' +
+        '<button class="detail-secondary-btn" onclick="copyMoviePath(' + idx + ')" title="Copy folder path to clipboard">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
                 '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>' +
                 '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>' +
             '</svg>' +
             'Copy Path' +
         '</button>' +
-    '</div></div></div>';
+        // Open Folder button
+        '<button class="detail-secondary-btn" onclick="openContainingFolder()" title="Open containing folder">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' +
+            'Open Folder' +
+        '</button>' +
+        // Favorite button
+        (function() { var isFav = window.isFavorite ? window.isFavorite(m.title) : false; return '<button class="detail-secondary-btn detail-fav-btn' + (isFav ? ' favorited' : '') + '" onclick="toggleFavoriteFromDetail(' + idx + ')" title="Toggle favorite">' +
+            '<svg viewBox="0 0 24 24" fill="' + (isFav ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>' +
+            (isFav ? 'Favorited' : 'Favorite') +
+        '</button>'; })() +
+        // Playlist button
+        (function() { var inPL = window.isInPlaylist ? window.isInPlaylist(m.title) : false; return '<button class="detail-secondary-btn detail-playlist-btn' + (inPL ? ' in-playlist' : '') + '" onclick="addToPlaylist(\'' + m.title.replace(/'/g, "\\'") + '\')" title="Add to playlist">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>' +
+            (inPL ? 'In Playlist' : 'Add to Playlist') +
+        '</button>'; })() +
+    '</div>' +
+    // Path display section - shows the path that will be copied
+    '<div class="detail-path-display" title="Click to copy path" onclick="copyMoviePath(' + idx + ')" style="cursor:pointer">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;flex-shrink:0">' +
+            '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>' +
+        '</svg>' +
+        '<span>' + window.Utils.escHtml(m.videoFilePath || m.fullPath || m.relativePath) + '</span>' +
+    '</div>' +
+    '</div></div>';
 
     if (nfo.tagline) {
         html += '<div class="detail-tagline">"' + window.Utils.escHtml(nfo.tagline) + '"</div>';
@@ -700,11 +741,49 @@ async function copyMoviePath(idx) {
     var m = window.filteredMovies[idx];
     if (!m) return;
     try {
-        var pathToCopy = m.fullPath || m.relativePath;
+        // Use the full video file path (includes filename for movies)
+        // Falls back to folder path, then relative path
+        var pathToCopy = m.videoFilePath || m.fullPath || m.relativePath;
+        if (!pathToCopy) {
+            window.Utils.showToast('No path available', 'warning');
+            return;
+        }
+        
+        // Prepend absolute path if set for this folder
+        if (m.libraryRoot && typeof window.getAbsolutePathsByName === 'function') {
+            var absPathsByName = window.getAbsolutePathsByName();
+            var absPrefix = absPathsByName[m.libraryRoot];
+            if (absPrefix) {
+                pathToCopy = absPrefix + pathToCopy;
+            }
+        }
+        
         await navigator.clipboard.writeText(pathToCopy);
         window.Utils.showToast('Path copied: ' + pathToCopy, 'success');
     } catch(e) {
-        window.Utils.showToast('Failed to copy path', 'warning');
+        // Fallback: try using a temporary textarea for clipboard copy
+        try {
+            var pathToCopy2 = m.videoFilePath || m.fullPath || m.relativePath;
+            // Prepend absolute path if set for this folder
+            if (m.libraryRoot && typeof window.getAbsolutePathsByName === 'function') {
+                var absPathsByName2 = window.getAbsolutePathsByName();
+                var absPrefix2 = absPathsByName2[m.libraryRoot];
+                if (absPrefix2) {
+                    pathToCopy2 = absPrefix2 + pathToCopy2;
+                }
+            }
+            var textarea = document.createElement('textarea');
+            textarea.value = pathToCopy2;
+            textarea.style.position = 'fixed';
+            textarea.style.left = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            window.Utils.showToast('Path copied: ' + pathToCopy2, 'success');
+        } catch(e2) {
+            window.Utils.showToast('Failed to copy path', 'warning');
+        }
     }
 }
 
@@ -762,8 +841,104 @@ window.goToCollection = function(setName) {
     }, 300);
 };
 
+// ============================================================================
+// IMAGE LIGHTBOX - Fullscreen overlay for poster/fanart images
+// ============================================================================
+
+function openLightbox(imageSrc, altText) {
+    // Remove existing lightbox if any
+    var existing = document.querySelector('.lightbox-overlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'lightbox-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-label', 'Image lightbox');
+
+    var img = document.createElement('img');
+    img.src = imageSrc;
+    img.alt = altText || '';
+    img.onclick = function(e) { e.stopPropagation(); };
+
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'lightbox-close';
+    closeBtn.innerHTML = '\u2715';
+    closeBtn.setAttribute('aria-label', 'Close lightbox');
+    closeBtn.onclick = function() { overlay.remove(); };
+
+    overlay.appendChild(img);
+    overlay.appendChild(closeBtn);
+
+    // Close on click on overlay background
+    overlay.onclick = function() { overlay.remove(); };
+
+    // Close on Escape key
+    function onKeydown(e) {
+        if (e.key === 'Escape') {
+            overlay.remove();
+            document.removeEventListener('keydown', onKeydown);
+        }
+    }
+    document.addEventListener('keydown', onKeydown);
+
+    document.body.appendChild(overlay);
+}
+
+window.openLightbox = openLightbox;
+
+// ============================================================================
+// OPEN CONTAINING FOLDER - Copy folder path to clipboard
+// ============================================================================
+
+window.openContainingFolder = function() {
+    var m = window.filteredMovies[window.DetailPage._currentIdx];
+    if (!m) return;
+
+    // Try to copy the folder path to clipboard
+    var folderPath = m.fullPath || m.relativePath || '';
+    if (folderPath) {
+        // Check for absolute path prefix
+        if (m.libraryRoot) {
+            try {
+                var absPaths = JSON.parse(localStorage.getItem('movieLibAbsolutePathsByName')) || {};
+                if (absPaths[m.libraryRoot]) {
+                    folderPath = absPaths[m.libraryRoot] + folderPath;
+                }
+            } catch(e) {}
+        }
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(folderPath).then(function() {
+                window.Utils.showToast('Folder path copied: ' + folderPath, 'success');
+            }).catch(function() {
+                fallbackCopyPath(folderPath);
+            });
+        } else {
+            fallbackCopyPath(folderPath);
+        }
+    } else {
+        window.Utils.showToast('No folder path available', 'warning');
+    }
+};
+
+function fallbackCopyPath(text) {
+    var textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+        document.execCommand('copy');
+        window.Utils.showToast('Folder path copied: ' + text, 'success');
+    } catch(e) {
+        window.Utils.showToast('Failed to copy path', 'warning');
+    }
+    document.body.removeChild(textarea);
+}
+
 // Export for use in other modules
-window.DetailPage = { showDetailPage, closeDetailPage, copyMoviePath, goToCollection, selectSeason, playTVShowFirstEpisode, playTVEpisode };
+window.DetailPage = { showDetailPage, closeDetailPage, copyMoviePath, goToCollection, selectSeason, playTVShowFirstEpisode, playTVEpisode, _currentIdx: -1 };
 
 // Also expose as global functions for inline HTML handlers
 window.showDetailPage = showDetailPage;
