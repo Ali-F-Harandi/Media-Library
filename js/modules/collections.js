@@ -192,7 +192,7 @@
                         '</svg>' +
                     '</div>' +
                     (movie.quality ? '<span class="movie-quality">' + window.Utils.escHtml(movie.quality) + '</span>' : '') +
-                    (rating ? '<span class="rating-badge">★ ' + rating.toFixed(1) + '</span>' : '') +
+                    (rating ? '<span class="rating-badge">\u2605 ' + rating.toFixed(1) + '</span>' : '') +
                 '</div>' +
                 '<div class="card-info">' +
                     '<div class="movie-title">' + window.Utils.escHtml(movie.title) + '</div>' +
@@ -255,8 +255,8 @@
             console.error('[Collections Debug] Tab element not found for:', tabName);
         }
         
-        // Activate nav tab (only for movies, tvshows, and collections)
-        if (tabName === 'movies' || tabName === 'tvshows' || tabName === 'collections') {
+        // Activate nav tab (for all tabs that have nav buttons)
+        if (tabName !== 'collectionDetail') {
             var navTab = document.querySelector('.nav-tab[data-tab="' + tabName + '"]');
             if (navTab) {
                 navTab.classList.add('active');
@@ -264,26 +264,54 @@
         }
         
         // Handle search box and view toggle visibility
+        // Search is now visible on ALL tabs except collections and collectionDetail
         var searchBox = document.getElementById('searchBox');
         var viewToggle = document.getElementById('viewToggle');
         
-        if (tabName === 'movies') {
-            if (searchBox) searchBox.classList.remove('hidden');
-            if (viewToggle) viewToggle.classList.remove('hidden');
-        } else {
-            if (searchBox) searchBox.classList.add('hidden');
-            if (viewToggle) viewToggle.classList.add('hidden');
+        var showSearchAndView = (tabName === 'all' || tabName === 'movies' || tabName === 'tvshows' || 
+                                  tabName === 'animation' || tabName === 'anime');
+        
+        if (searchBox) {
+            if (showSearchAndView) {
+                searchBox.classList.remove('hidden');
+            } else {
+                searchBox.classList.add('hidden');
+            }
+        }
+        if (viewToggle) {
+            if (showSearchAndView) {
+                viewToggle.classList.remove('hidden');
+            } else {
+                viewToggle.classList.add('hidden');
+            }
         }
         
-        // Refresh collections if switching to collections tab
+        // Refresh content for specific tabs
         if (tabName === 'collections') {
             renderCollections();
         }
         
-        // Refresh TV shows if switching to tvshows tab
         if (tabName === 'tvshows') {
             if (typeof window.UIRenderer !== 'undefined' && window.UIRenderer.renderTVShows) {
                 window.UIRenderer.renderTVShows();
+            }
+        }
+        
+        if (tabName === 'all') {
+            if (typeof window.UIRenderer !== 'undefined' && window.UIRenderer.renderAllTab) {
+                window.UIRenderer.renderAllTab();
+            }
+        }
+        
+        if (tabName === 'animation') {
+            if (typeof window.UIRenderer !== 'undefined' && window.UIRenderer.renderAnimationTab) {
+                window.UIRenderer.renderAnimationTab();
+            }
+        }
+        
+        if (tabName === 'anime') {
+            if (typeof window.UIRenderer !== 'undefined' && window.UIRenderer.renderAnimeTab) {
+                window.UIRenderer.renderAnimeTab();
             }
         }
     };
