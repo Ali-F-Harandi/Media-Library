@@ -1016,32 +1016,51 @@ window.showItemFromTab = window.showItemFromTab;
 window.playItemDirectly = window.playItemDirectly;
 
 // ============================================================================
-// TAB SWITCHING FUNCTION
+// TAB SWITCHING (defined here for guaranteed availability)
 // ============================================================================
 window.switchTab = function(tabName) {
-    // Remove active class from all nav tabs
+    // Hide all tabs
+    document.querySelectorAll('.tab-content').forEach(function(tab) {
+        tab.classList.remove('active');
+    });
+
+    // Deactivate all nav tabs
     document.querySelectorAll('.nav-tab').forEach(function(tab) {
         tab.classList.remove('active');
     });
-    
-    // Add active class to the clicked tab
-    var activeTabBtn = document.querySelector('.nav-tab[data-tab="' + tabName + '"]');
-    if (activeTabBtn) {
-        activeTabBtn.classList.add('active');
+
+    // Show selected tab - handle collectionDetailView specially
+    var targetTab;
+    if (tabName === 'collectionDetail') {
+        targetTab = document.getElementById('collectionDetailView');
+    } else {
+        targetTab = document.getElementById(tabName + 'Tab') || document.getElementById(tabName);
     }
-    
-    // Hide all tab content
-    document.querySelectorAll('.tab-content').forEach(function(content) {
-        content.classList.remove('active');
-    });
-    
-    // Show the selected tab content
-    var tabContentId = tabName + 'Tab';
-    if (tabName === 'collections') {
-        tabContentId = 'collectionsTab';
+
+    if (targetTab) {
+        targetTab.classList.add('active');
     }
-    var tabContent = document.getElementById(tabContentId);
-    if (tabContent) {
-        tabContent.classList.add('active');
+
+    // Activate nav tab (for all tabs that have nav buttons)
+    if (tabName !== 'collectionDetail') {
+        var navTab = document.querySelector('.nav-tab[data-tab="' + tabName + '"]');
+        if (navTab) {
+            navTab.classList.add('active');
+        }
     }
-};
+
+    // Handle search box and view toggle visibility
+    // Search is visible on ALL tabs except collections and collectionDetail
+    var searchBox = document.getElementById('searchBox');
+    var viewToggle = document.getElementById('viewToggle');
+
+    var showSearchAndView = (tabName === 'all' || tabName === 'movies' || tabName === 'tvshows' ||
+                              tabName === 'animation' || tabName === 'anime');
+
+    if (searchBox) {
+        if (showSearchAndView) {
+            searchBox.classList.remove('hidden');
+        } else {
+            searchBox.classList.add('hidden');
+        }
+    }
