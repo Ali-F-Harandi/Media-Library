@@ -2,7 +2,7 @@
   "name": "Media Library",
   "short_name": "MediaLib",
   "description": "Local Media Library Browser",
-  "start_url": "/bilko/index.html",
+  "start_url": "/bilkos-media-library/index.html",
   "display": "standalone",
   "background_color": "#0a0a0f",
   "theme_color": "#e50914",

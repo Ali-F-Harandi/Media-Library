@@ -309,10 +309,9 @@ window.matchesMultiGenre = function(m) {
  * Called after library is loaded/scanned
  */
 window.populateGenreTags = function() {
-    var container = document.getElementById('genreFilterTags');
-    if (!container) return;
-
-    // Collect all genres
+    var select = document.getElementById('genreFilterSelect');
+    if (!select) return;
+    
     var genreSet = {};
     window.allMovies.forEach(function(m) {
         if (m.nfoData && m.nfoData.genres) {
@@ -324,15 +323,49 @@ window.populateGenreTags = function() {
     var genres = Object.keys(genreSet).sort(function(a, b) {
         return a.toLowerCase().localeCompare(b.toLowerCase());
     });
-
-    // Build HTML with "All Genres" button + individual genre buttons
-    var html = '<button class="genre-tag' + (_selectedGenres.size === 0 ? ' active' : '') + '" data-genre="all" onclick="toggleGenreTag(\'all\', this)">All Genres</button>';
+    
+    var currentValue = select.value;
+    select.innerHTML = '<option value="">All Genres</option>';
     genres.forEach(function(g) {
-        var isActive = _selectedGenres.has(g) ? ' active' : '';
-        html += '<button class="genre-tag' + isActive + '" data-genre="' + window.Utils.escHtml(g) + '" onclick="toggleGenreTag(\'' + g.replace(/'/g, "\\'") + '\', this)">' + window.Utils.escHtml(g) + '</button>';
+        var opt = document.createElement('option');
+        opt.value = g;
+        opt.textContent = g;
+        select.appendChild(opt);
     });
-    container.innerHTML = html;
+    if (currentValue && genres.indexOf(currentValue) !== -1) {
+        select.value = currentValue;
+    }
     _genreTagsInitialized = true;
+};
+
+window.handleGenreFilterChange = function() {
+    var select = document.getElementById('genreFilterSelect');
+    if (!select) return;
+    _selectedGenres.clear();
+    if (select.value) {
+        _selectedGenres.add(select.value);
+    }
+    // Re-render the currently active tab
+    var activeTab = document.querySelector('.nav-tab.active');
+    if (activeTab) {
+        window.resetVisibleCount(activeTab.dataset.tab);
+        window.switchTab(activeTab.dataset.tab);
+    }
+};
+
+window.handleCountryFilterChange = function() {
+    var select = document.getElementById('countryFilterSelect');
+    if (!select) return;
+    _selectedCountries.clear();
+    if (select.value) {
+        _selectedCountries.add(select.value);
+    }
+    // Re-render the currently active tab
+    var activeTab = document.querySelector('.nav-tab.active');
+    if (activeTab) {
+        window.resetVisibleCount(activeTab.dataset.tab);
+        window.switchTab(activeTab.dataset.tab);
+    }
 };
 
 /**
@@ -340,16 +373,95 @@ window.populateGenreTags = function() {
  */
 window.clearMultiGenreFilter = function() {
     _selectedGenres.clear();
-    var container = document.getElementById('genreFilterTags');
-    if (container) {
+    var select = document.getElementById('genreFilterSelect');
+    if (select) select.value = '';
+};
+
+// ============================================================================
+// COUNTRY FILTER - Toggle buttons for country selection
+// ============================================================================
+var _selectedCountries = new Set();
+
+window.toggleCountryTag = function(country, btn) {
+    var container = document.getElementById('countryFilterTags');
+    if (!container) return;
+
+    if (country === 'all') {
+        _selectedCountries.clear();
         container.querySelectorAll('.genre-tag').forEach(function(tag) {
             tag.classList.remove('active');
-            if (tag.dataset.genre === 'all') {
+            if (tag.dataset.country === 'all') {
                 tag.classList.add('active');
             }
         });
+    } else {
+        if (_selectedCountries.has(country)) {
+            _selectedCountries.delete(country);
+            btn.classList.remove('active');
+        } else {
+            _selectedCountries.add(country);
+            btn.classList.add('active');
+        }
+        var allBtn = container.querySelector('.genre-tag[data-country="all"]');
+        if (allBtn) {
+            if (_selectedCountries.size === 0) {
+                allBtn.classList.add('active');
+            } else {
+                allBtn.classList.remove('active');
+            }
+        }
+    }
+
+    window.resetVisibleCount('all');
+    if (typeof window.filterAllTab === 'function') {
+        window.filterAllTab();
     }
 };
+
+window.matchesCountry = function(m) {
+    if (_selectedCountries.size === 0) return true;
+    if (!m.nfoData || !m.nfoData.country) return false;
+    return _selectedCountries.has(m.nfoData.country);
+};
+
+window.populateCountryTags = function() {
+    var select = document.getElementById('countryFilterSelect');
+    if (!select) return;
+    
+    var countrySet = {};
+    window.allMovies.forEach(function(m) {
+        if (m.nfoData && m.nfoData.country) {
+            m.nfoData.country.split('/').forEach(function(c) {
+                var trimmed = c.trim();
+                if (trimmed) countrySet[trimmed] = true;
+            });
+        }
+    });
+    var countries = Object.keys(countrySet).sort(function(a, b) {
+        return a.toLowerCase().localeCompare(b.toLowerCase());
+    });
+    
+    var currentValue = select.value;
+    select.innerHTML = '<option value="">All Countries</option>';
+    countries.forEach(function(c) {
+        var opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        select.appendChild(opt);
+    });
+    if (currentValue && countries.indexOf(currentValue) !== -1) {
+        select.value = currentValue;
+    }
+};
+
+window.clearCountryFilter = function() {
+    _selectedCountries.clear();
+    var select = document.getElementById('countryFilterSelect');
+    if (select) select.value = '';
+};
+
+// Expose _selectedCountries for the filter indicator check
+window._selectedCountries = _selectedCountries;
 
 // ============================================================================
 // CONTEXT MENU - Right-click context menu on movie cards
@@ -432,12 +544,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.addToPlaylist(m.title);
             }
         } else if (action === 'copypath') {
-            var path = m.videoFilePath || m.fullPath || '';
+            var folderNameCtx = m.folderHandle ? m.folderHandle.name : (m.fullPath ? m.fullPath.split('/').pop() : '');
+            var path = folderNameCtx + '\\';
             // Prepend absolute path if set for this folder
             if (m.libraryRoot && typeof window.getAbsolutePathsByName === 'function') {
                 var absPathsByName = window.getAbsolutePathsByName();
                 if (absPathsByName[m.libraryRoot]) {
-                    path = absPathsByName[m.libraryRoot] + path;
+                    var absPfxCtx = absPathsByName[m.libraryRoot].replace(/[/\\]+$/, '') + '\\';
+                    path = absPfxCtx + folderNameCtx + '\\';
                 }
             }
             if (navigator.clipboard && navigator.clipboard.writeText) {

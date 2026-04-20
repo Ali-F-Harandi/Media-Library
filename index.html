@@ -163,14 +163,14 @@
             <option value="all">All</option>
           </select>
         </div>
-        <button class="btn-header bulk-select-btn" id="bulkSelectBtn" onclick="toggleBulkSelect()" title="Bulk Select">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-          Select
-        </button>
+
         <div class="view-toggle" id="viewToggle">
           <button class="view-btn active" data-view="grid" onclick="setView('grid')" title="Grid View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>
           <button class="view-btn" data-view="detail" onclick="setView('detail')" title="Detail View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button>
           <button class="view-btn" data-view="list" onclick="setView('list')" title="List View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+          <button class="view-btn" data-view="compact" onclick="setView('compact')" title="Compact View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="4" height="4"/><rect x="10" y="3" width="4" height="4"/><rect x="17" y="3" width="4" height="4"/><rect x="3" y="10" width="4" height="4"/><rect x="10" y="10" width="4" height="4"/><rect x="17" y="10" width="4" height="4"/><rect x="3" y="17" width="4" height="4"/><rect x="10" y="17" width="4" height="4"/><rect x="17" y="17" width="4" height="4"/></svg></button>
+          <button class="view-btn" data-view="posters" onclick="setView('posters')" title="Poster Wall"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="1" width="5" height="7" rx="1"/><rect x="9" y="1" width="5" height="7" rx="1"/><rect x="17" y="1" width="5" height="7" rx="1"/><rect x="1" y="10" width="5" height="7" rx="1"/><rect x="9" y="10" width="5" height="7" rx="1"/><rect x="17" y="10" width="5" height="7" rx="1"/></svg></button>
+          <button class="view-btn" data-view="table" onclick="setView('table')" title="Table View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/><line x1="3" y1="3" x2="3" y2="21"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="21" y1="3" x2="21" y2="21"/><line x1="3" y1="3" x2="21" y2="3"/><line x1="3" y1="21" x2="21" y2="21"/></svg></button>
         </div>
         <div class="theme-selector">
           <button class="theme-btn" onclick="toggleThemeDropdown()" title="Toggle Theme">
@@ -205,10 +205,7 @@
         </div>
         <button class="btn-header pwa-install-btn" id="pwaInstallBtn" onclick="installPWA()" style="display:none" title="Install App"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Install</button>
         <button class="btn-header" onclick="selectFolder()" title="Reset Library"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Reset</button>
-        <button class="btn-header" onclick="randomPick()" title="Random Pick">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M16 8h.01"/><path d="M8 16h.01"/><path d="M12 12h.01"/></svg>
-          Lucky
-        </button>
+
       </div>
     </div>
   </header>
@@ -224,9 +221,7 @@
           <option value="rating-desc">Rating High-Low</option>
           <option value="size-desc">Size Large-Small</option>
         </select>
-        <select id="sharedGenreSelect" class="genre-filter-select" onchange="handleSharedGenreChange()">
-          <option value="">All Genres</option>
-        </select>
+
         <button class="filter-panel-toggle" id="filterPanelToggle" onclick="toggleAdvancedFilters()" title="Advanced Filters">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
           Filters
@@ -242,50 +237,84 @@
       <div id="skippedPanel" class="skipped-panel"><h4>Skipped Folders</h4><ul class="skipped-list" id="skippedList"></ul></div>
       <!-- Advanced filter panel (toggled by filter button) -->
       <div class="advanced-filter-panel" id="advancedFilterPanel">
-        <div class="filter-range-group">
-          <label class="filter-range-label">
-            <span>Year Range</span>
-            <span class="filter-range-value" id="yearRangeValue">1900 - 2030</span>
-          </label>
-          <div style="display:flex;gap:0.5rem;align-items:center">
-            <input type="range" class="filter-range-input" id="yearMinRange" min="1900" max="2030" value="1900" oninput="updateYearRange()">
-            <input type="range" class="filter-range-input" id="yearMaxRange" min="1900" max="2030" value="2030" oninput="updateYearRange()">
+        <div class="afp-content">
+          <!-- Filter chips row: active filters shown as removable pills -->
+          <div class="afp-chips-row" id="activeFilterChips"></div>
+          <!-- Filter controls grid -->
+          <div class="afp-controls">
+            <!-- Genre -->
+            <div class="afp-group">
+              <label class="afp-label">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                Genre
+              </label>
+              <select id="genreFilterSelect" class="afp-select" onchange="handleGenreFilterChange()">
+                <option value="">All Genres</option>
+              </select>
+            </div>
+            <!-- Country -->
+            <div class="afp-group">
+              <label class="afp-label">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                Country
+              </label>
+              <select id="countryFilterSelect" class="afp-select" onchange="handleCountryFilterChange()">
+                <option value="">All Countries</option>
+              </select>
+            </div>
+            <!-- Year -->
+            <div class="afp-group afp-group-year">
+              <label class="afp-label">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Year
+              </label>
+              <div class="afp-year-inputs">
+                <input type="number" id="yearMinInput" class="afp-input" min="1900" max="2050" value="1900" oninput="updateYearRange()" placeholder="From">
+                <span class="afp-dash">–</span>
+                <input type="number" id="yearMaxInput" class="afp-input" min="1900" max="2050" value="2050" oninput="updateYearRange()" placeholder="To">
+              </div>
+              <div class="afp-range-track" id="yearRangeTrack">
+                <input type="range" class="afp-range" id="yearMinRange" min="1900" max="2050" value="1900" oninput="updateYearRange()">
+                <input type="range" class="afp-range" id="yearMaxRange" min="1900" max="2050" value="2050" oninput="updateYearRange()">
+              </div>
+            </div>
+            <!-- File Size -->
+            <div class="afp-group afp-group-size">
+              <label class="afp-label">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Size
+              </label>
+              <div class="afp-size-inputs">
+                <input type="number" id="fileSizeMin" class="afp-input" placeholder="Min" min="0" step="0.1" oninput="updateFileSizeRange()">
+                <select id="fileSizeMinUnit" class="afp-unit" onchange="updateFileSizeRange()">
+                  <option value="mb">MB</option>
+                  <option value="gb" selected>GB</option>
+                </select>
+                <span class="afp-dash">–</span>
+                <input type="number" id="fileSizeMax" class="afp-input" placeholder="Max" min="0" step="0.1" oninput="updateFileSizeRange()">
+                <select id="fileSizeMaxUnit" class="afp-unit" onchange="updateFileSizeRange()">
+                  <option value="mb">MB</option>
+                  <option value="gb" selected>GB</option>
+                </select>
+              </div>
+            </div>
+            <!-- Rating -->
+            <div class="afp-group afp-group-rating">
+              <label class="afp-label">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--star-color)" stroke="var(--star-color)" stroke-width="1"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>
+                <span id="ratingRangeValue">0+</span>
+              </label>
+              <input type="range" class="afp-range afp-range-rating" id="ratingMinRange" min="0" max="10" step="0.5" value="0" oninput="updateRatingRange()">
+            </div>
+          </div>
+          <!-- Reset button -->
+          <div class="afp-footer">
+            <button class="afp-reset-btn" onclick="resetAdvancedFilters()" title="Reset all filters">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12a10 10 0 1 1-3.5-7.6"/><polyline points="22 4 22 12 14 12"/></svg>
+              Reset All Filters
+            </button>
           </div>
         </div>
-        <div class="filter-range-group">
-          <label class="filter-range-label">
-            <span>Min Rating</span>
-            <span class="filter-range-value" id="ratingRangeValue">0+</span>
-          </label>
-          <input type="range" class="filter-range-input" id="ratingMinRange" min="0" max="10" step="0.5" value="0" oninput="updateRatingRange()">
-        </div>
-        <div class="filter-range-group">
-          <label class="filter-range-label"><span>Type</span></label>
-          <div class="filter-tag-group" id="typeFilterGroup">
-            <button class="filter-tag active" data-type="all" onclick="setTypeFilter('all', this)"><svg class="filter-tag-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>All</button>
-            <button class="filter-tag" data-type="movies" onclick="setTypeFilter('movies', this)"><svg class="filter-tag-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Movies</button>
-            <button class="filter-tag" data-type="tvshows" onclick="setTypeFilter('tvshows', this)"><svg class="filter-tag-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>TV Shows</button>
-          </div>
-        </div>
-        <div class="filter-range-group">
-          <label class="filter-range-label"><span>File Size</span></label>
-          <div class="filter-tag-group" id="sizeFilterGroup">
-            <button class="filter-tag active" data-size="all" onclick="setSizeFilter('all', this)"><svg class="filter-tag-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>All</button>
-            <button class="filter-tag" data-size="small" onclick="setSizeFilter('small', this)"><svg class="filter-tag-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>&lt;1 GB</button>
-            <button class="filter-tag" data-size="medium" onclick="setSizeFilter('medium', this)"><svg class="filter-tag-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>1-10 GB</button>
-            <button class="filter-tag" data-size="large" onclick="setSizeFilter('large', this)"><svg class="filter-tag-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>&gt;10 GB</button>
-          </div>
-        </div>
-        <div class="filter-range-group" id="genreTagContainer">
-          <label class="filter-range-label"><span>Genres</span></label>
-          <div class="genre-filter-tags" id="genreFilterTags">
-            <button class="genre-tag active" data-genre="all" onclick="toggleGenreTag('all', this)">All Genres</button>
-          </div>
-        </div>
-        <button class="filter-reset-btn" onclick="resetAdvancedFilters()" title="Reset all filters">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12a10 10 0 1 1-3.5-7.6"/><polyline points="22 4 22 12 14 12"/></svg>
-          Reset
-        </button>
       </div>
     </div>
     <!-- All Tab -->

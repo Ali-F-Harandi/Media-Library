@@ -7,11 +7,14 @@
 
 var currentView = localStorage.getItem('movieLibView') || 'grid';
 
-// Display mode constants: grid, detail (extended info), list
+// Display mode constants: grid, detail (extended info), list, compact, posters, table
 var VIEW_MODES = {
     GRID: 'grid',
     DETAIL: 'detail',
-    LIST: 'list'
+    LIST: 'list',
+    COMPACT: 'compact',
+    POSTERS: 'posters',
+    TABLE: 'table'
 };
 
 // ============================================================================
@@ -386,15 +389,8 @@ window.handleSharedSortChange = function() {
 };
 
 window.handleSharedGenreChange = function() {
-    var activeTab = _getActiveTabName();
-    if (activeTab === 'movies') filterMovies();
-    else if (activeTab === 'all') renderAllTab();
-    else if (activeTab === 'tvshows') renderTVShows();
-    else if (activeTab === 'animation') renderAnimationTab();
-    else if (activeTab === 'anime') renderAnimeTab();
-    else if (activeTab === 'favorites' && typeof window.renderFavoritesTab === 'function') window.renderFavoritesTab();
-    else if (activeTab === 'history' && typeof window.renderHistoryTab === 'function') window.renderHistoryTab();
-    else if (activeTab === 'playlist' && typeof window.renderPlaylistTab === 'function') window.renderPlaylistTab();
+    // Deprecated: genre filtering now uses multi-genre tag buttons
+    // Kept as no-op for backwards compatibility
 };
 
 // ============================================================================
@@ -404,11 +400,9 @@ function filterMovies() {
     var q = document.getElementById('searchInput').value.toLowerCase().trim();
     var sortEl = document.getElementById('sharedSortSelect');
     var s = sortEl ? sortEl.value : 'name-asc';
-    var genreSelect = document.getElementById('sharedGenreSelect');
-    var genre = genreSelect ? genreSelect.value : '';
 
     window.filteredMovies = window.allMovies.filter(function(m) {
-        return !m.isTVShow && matchesSearch(m, q) && matchesGenre(m, genre) && matchesAdvancedFilters(m);
+        return !m.isTVShow && matchesSearch(m, q) && (typeof window.matchesMultiGenre === 'function' ? window.matchesMultiGenre(m) : true) && matchesAdvancedFilters(m);
     });
 
     sortItems(window.filteredMovies, s);
@@ -429,7 +423,6 @@ function filterMovies() {
     } else {
         renderMovies();
     }
-    populateGenreDropdowns();
 }
 
 // ============================================================================
@@ -567,11 +560,9 @@ function renderAllTab() {
     var q = document.getElementById('searchInput').value.toLowerCase().trim();
     var sortSelect = document.getElementById('sharedSortSelect');
     var s = sortSelect ? sortSelect.value : 'name-asc';
-    var genreSelect = document.getElementById('sharedGenreSelect');
-    var genre = genreSelect ? genreSelect.value : '';
 
     var items = window.allMovies.filter(function(m) {
-        return matchesSearch(m, q) && matchesGenre(m, genre) && matchesAdvancedFilters(m) && (typeof window.matchesMultiGenre === 'function' ? window.matchesMultiGenre(m) : true);
+        return matchesSearch(m, q) && (typeof window.matchesMultiGenre === 'function' ? window.matchesMultiGenre(m) : true) && matchesAdvancedFilters(m);
     });
 
     sortItems(items, s);
@@ -584,7 +575,7 @@ function renderAllTab() {
     // Render Continue Watching, Recently Added, and Top Rated sections
     // Only show shelves when no advanced filters, genre filter, or search are active
     var topRatedContainer = document.getElementById('allTopRated');
-    if (topRatedContainer && !genre && !q && !hasActiveAdvancedFilters()) {
+    if (topRatedContainer && !q && !hasActiveAdvancedFilters()) {
         var shelvesHtml = '';
         
         // Continue Watching shelf (from watch history)
@@ -633,10 +624,13 @@ function renderAllTab() {
 
     container.innerHTML = buildCardGrid(visibleItems, 'all');
     observeImages(container);
-    populateGenreDropdowns();
     // Also populate multi-genre tags
     if (typeof window.populateGenreTags === 'function') {
         window.populateGenreTags();
+    }
+    // Also populate country tags
+    if (typeof window.populateCountryTags === 'function') {
+        window.populateCountryTags();
     }
 
     // Add infinite scroll sentinel if there are more items
@@ -663,11 +657,9 @@ function renderAnimationTab() {
     var q = document.getElementById('searchInput').value.toLowerCase().trim();
     var sortSelect = document.getElementById('sharedSortSelect');
     var s = sortSelect ? sortSelect.value : 'name-asc';
-    var genreSelect = document.getElementById('sharedGenreSelect');
-    var genre = genreSelect ? genreSelect.value : '';
 
     var items = window.allMovies.filter(function(m) {
-        return isAnimation(m) && matchesSearch(m, q) && matchesGenre(m, genre) && matchesAdvancedFilters(m);
+        return isAnimation(m) && matchesSearch(m, q) && (typeof window.matchesMultiGenre === 'function' ? window.matchesMultiGenre(m) : true) && matchesAdvancedFilters(m);
     });
 
     sortItems(items, s);
@@ -715,11 +707,9 @@ function renderAnimeTab() {
     var q = document.getElementById('searchInput').value.toLowerCase().trim();
     var sortSelect = document.getElementById('sharedSortSelect');
     var s = sortSelect ? sortSelect.value : 'name-asc';
-    var genreSelect = document.getElementById('sharedGenreSelect');
-    var genre = genreSelect ? genreSelect.value : '';
 
     var items = window.allMovies.filter(function(m) {
-        return isAnime(m) && matchesSearch(m, q) && matchesGenre(m, genre) && matchesAdvancedFilters(m);
+        return isAnime(m) && matchesSearch(m, q) && (typeof window.matchesMultiGenre === 'function' ? window.matchesMultiGenre(m) : true) && matchesAdvancedFilters(m);
     });
 
     sortItems(items, s);
@@ -826,6 +816,7 @@ function buildCardGrid(items, tabId) {
             if (isTV) badgeHtml = '<span class="movie-quality tv-badge">TV Series</span>';
             else if (isAnm) badgeHtml = '<span class="movie-quality anime-badge">Anime</span>';
             else if (isAnim) badgeHtml = '<span class="movie-quality animation-badge">Animation</span>';
+            else badgeHtml = '<span class="movie-quality movie-badge">Movie</span>';
             var _midx = window.allMovies.indexOf(m);
             var isFav = window.isFavorite ? window.isFavorite(m.title) : false;
             var favBtn = '<button class="card-fav-btn' + (isFav ? ' favorited' : '') + '" onclick="event.stopPropagation();toggleFavoriteCard(\'' + m.title.replace(/'/g, "\\'") + '\')" title="Toggle favorite">' +
@@ -857,7 +848,6 @@ function buildCardGrid(items, tabId) {
                             '<polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>' +
                         '</svg>' + r.toFixed(1) +
                     '</div>' : '') +
-                    (m.quality ? '<span class="movie-quality">' + window.Utils.escHtml(m.quality) + '</span>' : '') +
                     badgeHtml +
                     favBtn +
                     watchedBadge +
@@ -870,7 +860,7 @@ function buildCardGrid(items, tabId) {
                     '</div>' +
                     (m.nfoData && m.nfoData.genres && m.nfoData.genres.length ?
                         '<div class="movie-genre">' + m.nfoData.genres.map(window.Utils.escHtml).join(', ') + '</div>' : '') +
-                    '<div class="movie-filesize">' + window.Utils.formatBytes(m.fileSize) + '</div>' +
+                    '<div class="movie-filesize">' + window.Utils.formatBytes(m.fileSize) + (m.quality ? ' \u2022 ' + window.Utils.escHtml(m.quality) : '') + '</div>' +
                 '</div>' +
             '</div>';
         }).join('') + '</div>';
@@ -933,6 +923,9 @@ function buildCardGrid(items, tabId) {
                 '</svg>' +
             '</div>';
         }).join('') + '</div>';
+    } else if (currentView === 'compact' || currentView === 'posters' || currentView === 'table') {
+        // Use shared buildCardItems for compact, poster wall, and table views
+        return buildCardItems(items, tabId);
     }
     return '';
 }
@@ -1062,9 +1055,7 @@ function renderTVShows() {
     if (!container) return;
 
     var q = document.getElementById('searchInput').value.toLowerCase().trim();
-    var genreSelect = document.getElementById('sharedGenreSelect');
-    var genre = genreSelect ? genreSelect.value : '';
-    var tvShows = window.allMovies.filter(function(m) { return m.isTVShow && matchesSearch(m, q) && matchesGenre(m, genre) && matchesAdvancedFilters(m); });
+    var tvShows = window.allMovies.filter(function(m) { return m.isTVShow && matchesSearch(m, q) && (typeof window.matchesMultiGenre === 'function' ? window.matchesMultiGenre(m) : true) && matchesAdvancedFilters(m); });
 
     // Sort TV shows
     var sortSelect = document.getElementById('sharedSortSelect');
@@ -1084,76 +1075,11 @@ function renderTVShows() {
 
     emptyState.style.display = 'none';
 
-    // Apply page size limit for TV shows
+    // Apply page size limit for TV shows tab
     var tvVisibleCount = window.getVisibleCount('tvshows', tvShows.length);
     var visibleTVShows = tvShows.slice(0, tvVisibleCount);
 
-    var html = '<div class="movie-grid tvshow-grid">';
-
-    visibleTVShows.forEach(function(m) {
-        // Find the real index in allMovies for detail page navigation
-        var realIdx = window.allMovies.indexOf(m);
-        var r = m.nfoData && m.nfoData.rating;
-        var hasPoster = !!m.posterHandle;
-
-        // Build season info text
-        var seasonInfo = m.totalSeasons + ' Season' + (m.totalSeasons > 1 ? 's' : '') + ' \u2022 ' + m.totalEpisodes + ' Episode' + (m.totalEpisodes > 1 ? 's' : '');
-
-        // Badge logic
-        var badgeHtml = '<span class="movie-quality tv-badge">TV Series</span>';
-        if (isAnime(m)) badgeHtml += ' <span class="movie-quality anime-badge">Anime</span>';
-        else if (isAnimation(m)) badgeHtml += ' <span class="movie-quality animation-badge">Animation</span>';
-
-        // Favorite button
-        var isFav = window.isFavorite ? window.isFavorite(m.title) : false;
-        var favBtn = '<button class="card-fav-btn' + (isFav ? ' favorited' : '') + '" onclick="event.stopPropagation();toggleFavoriteCard(\'' + m.title.replace(/'/g, "\\'") + '\')" title="Toggle favorite">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isFav ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>' +
-        '</button>';
-
-        // Watched badge
-        var isWatchedItem = window.isWatched ? window.isWatched(m.title) : false;
-        var watchedBadge = isWatchedItem ? '<span class="watched-badge" title="Watched"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>' : '';
-
-        html += '<div class="movie-card tvshow-card" onclick="showTVShowFromTab(' + realIdx + ')" ondblclick="playItemDirectly(' + realIdx + ')" title="Double-click to play">' +
-            '<div class="poster-container">' +
-                (m.logoHandle ? '<img class="logo-img" data-movie-idx="' + realIdx + '">' : '') +
-                '<img class="poster-img" data-movie-idx="' + realIdx + '">' +
-                '<div class="no-poster-placeholder"' + (hasPoster ? ' style="display:none"' : '') + '>' +
-                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
-                        '<rect x="2" y="7" width="20" height="15" rx="2"/>' +
-                        '<polyline points="17 2 12 7 7 2"/>' +
-                    '</svg>' +
-                '</div>' +
-                '<div class="card-overlay">' +
-                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
-                        '<circle cx="12" cy="12" r="10"/>' +
-                        '<polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none"/>' +
-                    '</svg>' +
-                '</div>' +
-                (m.hasNfo ? '<span class="nfo-badge">NFO</span>' : '') +
-                (r ? '<div class="rating-badge">' +
-                    '<svg width="12" height="12" viewBox="0 0 24 24" fill="var(--star-color)">' +
-                        '<polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>' +
-                    '</svg>' + r.toFixed(1) +
-                '</div>' : '') +
-                badgeHtml +
-                favBtn +
-                watchedBadge +
-            '</div>' +
-            '<div class="card-info">' +
-                '<div class="movie-title">' + window.Utils.escHtml(m.title) + '</div>' +
-                '<div class="movie-year">' + m.year + ' \u2022 ' + seasonInfo + '</div>' +
-                (m.nfoData && m.nfoData.genres && m.nfoData.genres.length ?
-                    '<div class="movie-genre">' + m.nfoData.genres.map(window.Utils.escHtml).join(', ') + '</div>' : '') +
-                '<div class="movie-filesize">' + window.Utils.formatBytes(m.fileSize) + '</div>' +
-            '</div>' +
-        '</div>';
-    });
-
-    html += '</div>';
-    container.innerHTML = html;
-
-    // Lazy-load TV show posters via IntersectionObserver
+    container.innerHTML = buildCardGrid(visibleTVShows, 'tvshows');
     observeImages(container);
 
     // Add infinite scroll sentinel for TV shows tab if page size limits apply
@@ -1334,10 +1260,10 @@ function renderMovies() {
 // ============================================================================
 var _advancedFilterState = {
     yearMin: 1900,
-    yearMax: 2030,
+    yearMax: 2050,
     ratingMin: 0,
-    typeFilter: 'all',    // 'all', 'movies', 'tvshows'
-    sizeFilter: 'all'     // 'all', 'small', 'medium', 'large'
+    sizeMinBytes: 0,   // 0 = no min
+    sizeMaxBytes: 0     // 0 = no max
 };
 
 /**
@@ -1362,27 +1288,42 @@ window.toggleAdvancedFilters = function() {
  * Update the year range display and apply filters
  */
 window.updateYearRange = function() {
-    var minEl = document.getElementById('yearMinRange');
-    var maxEl = document.getElementById('yearMaxRange');
-    var valueEl = document.getElementById('yearRangeValue');
-    if (!minEl || !maxEl || !valueEl) return;
+    var minRange = document.getElementById('yearMinRange');
+    var maxRange = document.getElementById('yearMaxRange');
+    var minInput = document.getElementById('yearMinInput');
+    var maxInput = document.getElementById('yearMaxInput');
+    if (!minRange || !maxRange) return;
 
-    var minVal = parseInt(minEl.value);
-    var maxVal = parseInt(maxEl.value);
+    // Sync range and input fields
+    if (minInput && document.activeElement === minInput) {
+        var minVal = parseInt(minInput.value) || 1900;
+        minRange.value = minVal;
+    } else {
+        if (minInput) minInput.value = minRange.value;
+    }
+    if (maxInput && document.activeElement === maxInput) {
+        var maxVal = parseInt(maxInput.value) || 2050;
+        maxRange.value = maxVal;
+    } else {
+        if (maxInput) maxInput.value = maxRange.value;
+    }
+
+    var minVal = parseInt(minRange.value);
+    var maxVal = parseInt(maxRange.value);
 
     // Ensure min <= max
     if (minVal > maxVal) {
-        // Swap values
         var temp = minVal;
         minVal = maxVal;
         maxVal = temp;
-        minEl.value = minVal;
-        maxEl.value = maxVal;
+        minRange.value = minVal;
+        maxRange.value = maxVal;
+        if (minInput) minInput.value = minVal;
+        if (maxInput) maxInput.value = maxVal;
     }
 
     _advancedFilterState.yearMin = minVal;
     _advancedFilterState.yearMax = maxVal;
-    valueEl.textContent = minVal + ' - ' + maxVal;
     applyAdvancedFilters();
 };
 
@@ -1401,34 +1342,35 @@ window.updateRatingRange = function() {
 };
 
 /**
- * Set the type filter (All / Movies / TV Shows)
+ * Update the file size range filter and apply
  */
-window.setTypeFilter = function(type, btn) {
-    _advancedFilterState.typeFilter = type;
-    var group = document.getElementById('typeFilterGroup');
-    if (group) {
-        group.querySelectorAll('.filter-tag').forEach(function(t) {
-            t.classList.remove('active');
-        });
+window.updateFileSizeRange = function() {
+    var minEl = document.getElementById('fileSizeMin');
+    var maxEl = document.getElementById('fileSizeMax');
+    var minUnitEl = document.getElementById('fileSizeMinUnit');
+    var maxUnitEl = document.getElementById('fileSizeMaxUnit');
+
+    var minVal = parseFloat(minEl ? minEl.value : 0) || 0;
+    var maxVal = parseFloat(maxEl ? maxEl.value : 0) || 0;
+    var minUnit = minUnitEl ? minUnitEl.value : 'gb';
+    var maxUnit = maxUnitEl ? maxUnitEl.value : 'gb';
+
+    // Convert to bytes
+    var minBytes = 0;
+    if (minVal > 0) {
+        minBytes = minUnit === 'gb' ? minVal * 1024 * 1024 * 1024 : minVal * 1024 * 1024;
     }
-    if (btn) btn.classList.add('active');
+    var maxBytes = 0;
+    if (maxVal > 0) {
+        maxBytes = maxUnit === 'gb' ? maxVal * 1024 * 1024 * 1024 : maxVal * 1024 * 1024;
+    }
+
+    _advancedFilterState.sizeMinBytes = minBytes;
+    _advancedFilterState.sizeMaxBytes = maxBytes;
     applyAdvancedFilters();
 };
 
-/**
- * Set the file size filter (All / Small / Medium / Large)
- */
-window.setSizeFilter = function(size, btn) {
-    _advancedFilterState.sizeFilter = size;
-    var group = document.getElementById('sizeFilterGroup');
-    if (group) {
-        group.querySelectorAll('.filter-tag').forEach(function(t) {
-            t.classList.remove('active');
-        });
-    }
-    if (btn) btn.classList.add('active');
-    applyAdvancedFilters();
-};
+
 
 /**
  * Reset all advanced filters to defaults
@@ -1436,51 +1378,43 @@ window.setSizeFilter = function(size, btn) {
 window.resetAdvancedFilters = function() {
     _advancedFilterState = {
         yearMin: 1900,
-        yearMax: 2030,
+        yearMax: 2050,
         ratingMin: 0,
-        typeFilter: 'all',
-        sizeFilter: 'all'
+        sizeMinBytes: 0,
+        sizeMaxBytes: 0
     };
 
     // Reset UI elements
     var yearMin = document.getElementById('yearMinRange');
     var yearMax = document.getElementById('yearMaxRange');
-    var yearVal = document.getElementById('yearRangeValue');
+    var yearMinInput = document.getElementById('yearMinInput');
+    var yearMaxInput = document.getElementById('yearMaxInput');
     var ratingMin = document.getElementById('ratingMinRange');
     var ratingVal = document.getElementById('ratingRangeValue');
+    var fileSizeMin = document.getElementById('fileSizeMin');
+    var fileSizeMax = document.getElementById('fileSizeMax');
 
     if (yearMin) yearMin.value = 1900;
-    if (yearMax) yearMax.value = 2030;
-    if (yearVal) yearVal.textContent = '1900 - 2030';
+    if (yearMax) yearMax.value = 2050;
+    if (yearMinInput) yearMinInput.value = 1900;
+    if (yearMaxInput) yearMaxInput.value = 2050;
     if (ratingMin) ratingMin.value = 0;
     if (ratingVal) ratingVal.textContent = '0+';
-
-    // Reset type filter tags
-    var typeGroup = document.getElementById('typeFilterGroup');
-    if (typeGroup) {
-        typeGroup.querySelectorAll('.filter-tag').forEach(function(t) {
-            t.classList.remove('active');
-        });
-        var allTypeBtn = typeGroup.querySelector('[data-type="all"]');
-        if (allTypeBtn) allTypeBtn.classList.add('active');
-    }
-
-    // Reset size filter tags
-    var sizeGroup = document.getElementById('sizeFilterGroup');
-    if (sizeGroup) {
-        sizeGroup.querySelectorAll('.filter-tag').forEach(function(t) {
-            t.classList.remove('active');
-        });
-        var allSizeBtn = sizeGroup.querySelector('[data-size="all"]');
-        if (allSizeBtn) allSizeBtn.classList.add('active');
-    }
+    if (fileSizeMin) fileSizeMin.value = '';
+    if (fileSizeMax) fileSizeMax.value = '';
 
     // Reset multi-genre filter
     if (typeof window.clearMultiGenreFilter === 'function') {
         window.clearMultiGenreFilter();
     }
 
+    // Reset country filter
+    if (typeof window.clearCountryFilter === 'function') {
+        window.clearCountryFilter();
+    }
+
     updateFilterIndicator();
+    updateFilterChips();
     renderAllTab();
 };
 
@@ -1489,6 +1423,7 @@ window.resetAdvancedFilters = function() {
  */
 function applyAdvancedFilters() {
     updateFilterIndicator();
+    updateFilterChips();
     var activeTab = _getActiveTabName();
     if (activeTab === 'movies') filterMovies();
     else if (activeTab === 'all') renderAllTab();
@@ -1505,16 +1440,138 @@ function updateFilterIndicator() {
     if (!indicator) return;
 
     var hasActive = _advancedFilterState.yearMin > 1900 ||
-                    _advancedFilterState.yearMax < 2030 ||
+                    _advancedFilterState.yearMax < 2050 ||
                     _advancedFilterState.ratingMin > 0 ||
-                    _advancedFilterState.typeFilter !== 'all' ||
-                    _advancedFilterState.sizeFilter !== 'all';
+                    _advancedFilterState.sizeMinBytes > 0 ||
+                    _advancedFilterState.sizeMaxBytes > 0 ||
+                    (typeof window._selectedGenres !== 'undefined' && window._selectedGenres && window._selectedGenres.size > 0) ||
+                    (typeof window._selectedCountries !== 'undefined' && window._selectedCountries && window._selectedCountries.size > 0) ||
+                    (document.getElementById('genreFilterSelect') && document.getElementById('genreFilterSelect').value) ||
+                    (document.getElementById('countryFilterSelect') && document.getElementById('countryFilterSelect').value);
 
     if (hasActive) {
         indicator.classList.add('visible');
     } else {
         indicator.classList.remove('visible');
     }
+}
+
+/**
+ * Update the active filter chips display
+ * Shows removable pill tags for each active filter
+ */
+function updateFilterChips() {
+    var container = document.getElementById('activeFilterChips');
+    if (!container) return;
+
+    var chips = [];
+    var genreSelect = document.getElementById('genreFilterSelect');
+    if (genreSelect && genreSelect.value) {
+        chips.push({
+            type: 'genre',
+            label: genreSelect.value,
+            onRemove: function() {
+                genreSelect.value = '';
+                if (typeof window.handleGenreFilterChange === 'function') {
+                    window.handleGenreFilterChange();
+                }
+            }
+        });
+    }
+
+    var countrySelect = document.getElementById('countryFilterSelect');
+    if (countrySelect && countrySelect.value) {
+        chips.push({
+            type: 'country',
+            label: '\ud83c\udf0d ' + countrySelect.value,
+            onRemove: function() {
+                countrySelect.value = '';
+                if (typeof window.handleCountryFilterChange === 'function') {
+                    window.handleCountryFilterChange();
+                }
+            }
+        });
+    }
+
+    if (_advancedFilterState.yearMin > 1900 || _advancedFilterState.yearMax < 2050) {
+        var yLabel = '\ud83d\udcc5 ' + _advancedFilterState.yearMin + '–' + _advancedFilterState.yearMax;
+        chips.push({
+            type: 'year',
+            label: yLabel,
+            onRemove: function() {
+                _advancedFilterState.yearMin = 1900;
+                _advancedFilterState.yearMax = 2050;
+                var yearMinR = document.getElementById('yearMinRange');
+                var yearMaxR = document.getElementById('yearMaxRange');
+                var yearMinI = document.getElementById('yearMinInput');
+                var yearMaxI = document.getElementById('yearMaxInput');
+                if (yearMinR) yearMinR.value = 1900;
+                if (yearMaxR) yearMaxR.value = 2050;
+                if (yearMinI) yearMinI.value = 1900;
+                if (yearMaxI) yearMaxI.value = 2050;
+                applyAdvancedFilters();
+            }
+        });
+    }
+
+    if (_advancedFilterState.ratingMin > 0) {
+        chips.push({
+            type: 'rating',
+            label: '\u2b50 ' + _advancedFilterState.ratingMin + '+',
+            onRemove: function() {
+                _advancedFilterState.ratingMin = 0;
+                var ratingMin = document.getElementById('ratingMinRange');
+                var ratingVal = document.getElementById('ratingRangeValue');
+                if (ratingMin) ratingMin.value = 0;
+                if (ratingVal) ratingVal.textContent = '0+';
+                applyAdvancedFilters();
+            }
+        });
+    }
+
+    if (_advancedFilterState.sizeMinBytes > 0 || _advancedFilterState.sizeMaxBytes > 0) {
+        var sizeLabel = '\ud83d\udcbe ';
+        if (_advancedFilterState.sizeMinBytes > 0) {
+            sizeLabel += (_advancedFilterState.sizeMinBytes / (1024*1024*1024)).toFixed(1) + 'GB+';
+        }
+        if (_advancedFilterState.sizeMaxBytes > 0) {
+            sizeLabel += '\u2264' + (_advancedFilterState.sizeMaxBytes / (1024*1024*1024)).toFixed(1) + 'GB';
+        }
+        chips.push({
+            type: 'size',
+            label: sizeLabel,
+            onRemove: function() {
+                _advancedFilterState.sizeMinBytes = 0;
+                _advancedFilterState.sizeMaxBytes = 0;
+                var fsMin = document.getElementById('fileSizeMin');
+                var fsMax = document.getElementById('fileSizeMax');
+                if (fsMin) fsMin.value = '';
+                if (fsMax) fsMax.value = '';
+                applyAdvancedFilters();
+            }
+        });
+    }
+
+    // Render chips
+    container.innerHTML = chips.map(function(chip, idx) {
+        return '<span class="afp-chip" data-chip-idx="' + idx + '">' +
+            window.Utils.escHtml(chip.label) +
+            '<span class="afp-chip-x" data-chip-idx="' + idx + '">' +
+                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+            '</span>' +
+        '</span>';
+    }).join('');
+
+    // Bind remove handlers
+    container.querySelectorAll('.afp-chip-x').forEach(function(xBtn) {
+        var idx = parseInt(xBtn.dataset.chipIdx);
+        if (chips[idx] && chips[idx].onRemove) {
+            xBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                chips[idx].onRemove();
+            });
+        }
+    });
 }
 
 /**
@@ -1532,18 +1589,23 @@ function matchesAdvancedFilters(m) {
         if (rating < _advancedFilterState.ratingMin) return false;
     }
 
-    // Type filter
-    if (_advancedFilterState.typeFilter === 'movies' && m.isTVShow) return false;
-    if (_advancedFilterState.typeFilter === 'tvshows' && !m.isTVShow) return false;
-
     // File size filter
-    if (_advancedFilterState.sizeFilter !== 'all') {
+    if (_advancedFilterState.sizeMinBytes > 0) {
         var size = m.fileSize || 0;
-        var sizeBytes = size;
-        var sizeGB = sizeBytes / (1024 * 1024 * 1024);
-        if (_advancedFilterState.sizeFilter === 'small' && sizeGB >= 1) return false;
-        if (_advancedFilterState.sizeFilter === 'medium' && (sizeGB < 1 || sizeGB > 10)) return false;
-        if (_advancedFilterState.sizeFilter === 'large' && sizeGB <= 10) return false;
+        if (size < _advancedFilterState.sizeMinBytes) return false;
+    }
+    if (_advancedFilterState.sizeMaxBytes > 0) {
+        var size = m.fileSize || 0;
+        if (size > _advancedFilterState.sizeMaxBytes) return false;
+    }
+
+    // Country filter
+    if (typeof window.matchesCountry === 'function' && !window.matchesCountry(m)) return false;
+
+    // Genre filter from select dropdown
+    var genreSelect = document.getElementById('genreFilterSelect');
+    if (genreSelect && genreSelect.value) {
+        if (!matchesGenre(m, genreSelect.value)) return false;
     }
 
     return true;
@@ -1554,10 +1616,13 @@ function matchesAdvancedFilters(m) {
  */
 function hasActiveAdvancedFilters() {
     return _advancedFilterState.yearMin > 1900 ||
-           _advancedFilterState.yearMax < 2030 ||
+           _advancedFilterState.yearMax < 2050 ||
            _advancedFilterState.ratingMin > 0 ||
-           _advancedFilterState.typeFilter !== 'all' ||
-           _advancedFilterState.sizeFilter !== 'all';
+           _advancedFilterState.sizeMinBytes > 0 ||
+           _advancedFilterState.sizeMaxBytes > 0 ||
+           (typeof window._selectedCountries !== 'undefined' && window._selectedCountries && window._selectedCountries.size > 0) ||
+           (document.getElementById('genreFilterSelect') && document.getElementById('genreFilterSelect').value) ||
+           (document.getElementById('countryFilterSelect') && document.getElementById('countryFilterSelect').value);
 }
 
 // Export for use in other modules
@@ -1575,7 +1640,7 @@ window.UIRenderer = {
     renderAnimationTab: renderAnimationTab,
     renderAnimeTab: renderAnimeTab,
     renderTopRatedRow: renderTopRatedRow,
-    populateGenreDropdowns: populateGenreDropdowns,
+    populateGenreDropdowns: function() { /* deprecated - uses tag-based filter now */ },
     isAnimation: isAnimation,
     isAnime: isAnime
 };
@@ -1607,6 +1672,7 @@ function buildCardItems(items, tabId) {
             if (isTV) badgeHtml = '<span class="movie-quality tv-badge">TV Series</span>';
             else if (isAnm) badgeHtml = '<span class="movie-quality anime-badge">Anime</span>';
             else if (isAnim) badgeHtml = '<span class="movie-quality animation-badge">Animation</span>';
+            else badgeHtml = '<span class="movie-quality movie-badge">Movie</span>';
             var _midx = window.allMovies.indexOf(m);
             var isFav = window.isFavorite ? window.isFavorite(m.title) : false;
             var favBtn = '<button class="card-fav-btn' + (isFav ? ' favorited' : '') + '" onclick="event.stopPropagation();toggleFavoriteCard(\'' + m.title.replace(/'/g, "\\'") + '\')" title="Toggle favorite">' +
@@ -1638,7 +1704,6 @@ function buildCardItems(items, tabId) {
                             '<polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>' +
                         '</svg>' + r.toFixed(1) +
                     '</div>' : '') +
-                    (m.quality ? '<span class="movie-quality">' + window.Utils.escHtml(m.quality) + '</span>' : '') +
                     badgeHtml +
                     favBtn +
                     watchedBadge +
@@ -1651,7 +1716,7 @@ function buildCardItems(items, tabId) {
                     '</div>' +
                     (m.nfoData && m.nfoData.genres && m.nfoData.genres.length ?
                         '<div class="movie-genre">' + m.nfoData.genres.map(window.Utils.escHtml).join(', ') + '</div>' : '') +
-                    '<div class="movie-filesize">' + window.Utils.formatBytes(m.fileSize) + '</div>' +
+                    '<div class="movie-filesize">' + window.Utils.formatBytes(m.fileSize) + (m.quality ? ' \u2022 ' + window.Utils.escHtml(m.quality) : '') + '</div>' +
                 '</div>' +
             '</div>';
         }).join('');
@@ -1709,6 +1774,63 @@ function buildCardItems(items, tabId) {
                 '<svg class="list-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>' +
             '</div>';
         }).join('');
+    } else if (currentView === 'compact') {
+        // Compact: small cards in a dense grid, just poster thumbnail + title + year
+        return '<div class="movie-compact-grid">' + items.map(function(m, i) {
+            var _midx = window.allMovies.indexOf(m);
+            var isTV = m.isTVShow;
+            var typeLabel = isTV ? 'TV' : 'Movie';
+            return '<div class="compact-card card-new" onclick="showItemFromTab(' + _midx + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx + ')" title="' + window.Utils.escHtml(m.title) + '">' +
+                '<div class="compact-poster">' +
+                    '<img class="poster-img" data-movie-idx="' + _midx + '">' +
+                '</div>' +
+                '<div class="compact-info">' +
+                    '<div class="compact-title">' + window.Utils.escHtml(m.title) + '</div>' +
+                    '<div class="compact-meta">' + m.year + ' \u2022 ' + typeLabel + '</div>' +
+                '</div>' +
+            '</div>';
+        }).join('') + '</div>';
+    } else if (currentView === 'posters') {
+        // Poster Wall: dense grid of just poster images, no text. Tooltip on hover.
+        return '<div class="movie-poster-wall">' + items.map(function(m, i) {
+            var _midx = window.allMovies.indexOf(m);
+            var r = m.nfoData && m.nfoData.rating;
+            return '<div class="poster-wall-item card-new" onclick="showItemFromTab(' + _midx + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx + ')" title="' + window.Utils.escHtml(m.title) + ' (' + m.year + ')' + (r ? ' \u2605' + r.toFixed(1) : '') + '">' +
+                '<img class="poster-img" data-movie-idx="' + _midx + '">' +
+                '<div class="no-poster-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div>' +
+                (r ? '<span class="poster-wall-rating">\u2605' + r.toFixed(1) + '</span>' : '') +
+            '</div>';
+        }).join('') + '</div>';
+    } else if (currentView === 'table') {
+        // Table: tabular data with columns for poster, title, year, type, rating, size, quality, genres
+        return '<div class="movie-table-wrapper"><table class="movie-table">' +
+            '<thead><tr>' +
+                '<th class="tbl-col-thumb"></th>' +
+                '<th class="tbl-col-title">Title</th>' +
+                '<th class="tbl-col-year">Year</th>' +
+                '<th class="tbl-col-type">Type</th>' +
+                '<th class="tbl-col-rating">Rating</th>' +
+                '<th class="tbl-col-size">Size</th>' +
+                '<th class="tbl-col-quality">Quality</th>' +
+                '<th class="tbl-col-genres">Genres</th>' +
+            '</tr></thead><tbody>' +
+            items.map(function(m, i) {
+                var _midx = window.allMovies.indexOf(m);
+                var r = m.nfoData && m.nfoData.rating;
+                var typeLabel = m.isTVShow ? 'TV Show' : 'Movie';
+                var genres = (m.nfoData && m.nfoData.genres) ? m.nfoData.genres.slice(0, 3).map(window.Utils.escHtml).join(', ') : '';
+                return '<tr class="tbl-row card-new" onclick="showItemFromTab(' + _midx + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx + ')" style="cursor:pointer">' +
+                    '<td class="tbl-col-thumb"><img class="poster-img tbl-thumb" data-movie-idx="' + _midx + '"></td>' +
+                    '<td class="tbl-col-title">' + window.Utils.escHtml(m.title) + '</td>' +
+                    '<td class="tbl-col-year">' + m.year + '</td>' +
+                    '<td class="tbl-col-type"><span class="tbl-type-badge tbl-type-' + (m.isTVShow ? 'tv' : 'movie') + '">' + typeLabel + '</span></td>' +
+                    '<td class="tbl-col-rating">' + (r ? '<span class="tbl-rating">\u2605 ' + r.toFixed(1) + '</span>' : '-') + '</td>' +
+                    '<td class="tbl-col-size">' + window.Utils.formatBytes(m.fileSize) + '</td>' +
+                    '<td class="tbl-col-quality">' + (m.quality ? window.Utils.escHtml(m.quality) : '-') + '</td>' +
+                    '<td class="tbl-col-genres">' + genres + '</td>' +
+                '</tr>';
+            }).join('') +
+            '</tbody></table></div>';
     }
     return '';
 }
@@ -1763,7 +1885,7 @@ function buildTVShowCardItems(items) {
                 '<div class="movie-year">' + m.year + ' \u2022 ' + seasonInfo + '</div>' +
                 (m.nfoData && m.nfoData.genres && m.nfoData.genres.length ?
                     '<div class="movie-genre">' + m.nfoData.genres.map(window.Utils.escHtml).join(', ') + '</div>' : '') +
-                '<div class="movie-filesize">' + window.Utils.formatBytes(m.fileSize) + '</div>' +
+                '<div class="movie-filesize">' + window.Utils.formatBytes(m.fileSize) + (m.quality ? ' \u2022 ' + window.Utils.escHtml(m.quality) : '') + '</div>' +
             '</div>' +
         '</div>';
     }).join('');
@@ -1777,31 +1899,29 @@ function appendMoreCards(tabId, fromIndex, toIndex) {
     var q = document.getElementById('searchInput').value.toLowerCase().trim();
     var sortSelect = document.getElementById('sharedSortSelect');
     var s = sortSelect ? sortSelect.value : 'name-asc';
-    var genreSelect = document.getElementById('sharedGenreSelect');
-    var genre = genreSelect ? genreSelect.value : '';
     var filterCount = document.getElementById('sharedFilterCount');
 
     // Get filtered items for the specific tab
     var items;
     if (tabId === 'all') {
         items = window.allMovies.filter(function(m) {
-            return matchesSearch(m, q) && matchesGenre(m, genre) && matchesAdvancedFilters(m) && (typeof window.matchesMultiGenre === 'function' ? window.matchesMultiGenre(m) : true);
+            return matchesSearch(m, q) && (typeof window.matchesMultiGenre === 'function' ? window.matchesMultiGenre(m) : true) && matchesAdvancedFilters(m);
         });
     } else if (tabId === 'movies') {
         items = window.filteredMovies || window.allMovies.filter(function(m) {
-            return !m.isTVShow && matchesSearch(m, q) && matchesGenre(m, genre) && matchesAdvancedFilters(m);
+            return !m.isTVShow && matchesSearch(m, q) && (typeof window.matchesMultiGenre === 'function' ? window.matchesMultiGenre(m) : true) && matchesAdvancedFilters(m);
         });
     } else if (tabId === 'tvshows') {
         items = window.allMovies.filter(function(m) {
-            return m.isTVShow && matchesSearch(m, q) && matchesGenre(m, genre) && matchesAdvancedFilters(m);
+            return m.isTVShow && matchesSearch(m, q) && (typeof window.matchesMultiGenre === 'function' ? window.matchesMultiGenre(m) : true) && matchesAdvancedFilters(m);
         });
     } else if (tabId === 'animation') {
         items = window.allMovies.filter(function(m) {
-            return isAnimation(m) && matchesSearch(m, q) && matchesGenre(m, genre) && matchesAdvancedFilters(m);
+            return isAnimation(m) && matchesSearch(m, q) && (typeof window.matchesMultiGenre === 'function' ? window.matchesMultiGenre(m) : true) && matchesAdvancedFilters(m);
         });
     } else if (tabId === 'anime') {
         items = window.allMovies.filter(function(m) {
-            return isAnime(m) && matchesSearch(m, q) && matchesGenre(m, genre) && matchesAdvancedFilters(m);
+            return isAnime(m) && matchesSearch(m, q) && (typeof window.matchesMultiGenre === 'function' ? window.matchesMultiGenre(m) : true) && matchesAdvancedFilters(m);
         });
     } else {
         return;
@@ -1825,7 +1945,7 @@ function appendMoreCards(tabId, fromIndex, toIndex) {
     if (!container) return;
 
     // Find the existing grid inside the container
-    var gridContainer = container.querySelector('.movie-grid, .movie-detail-grid, .movie-list');
+    var gridContainer = container.querySelector('.movie-grid, .movie-detail-grid, .movie-list, .movie-compact-grid, .movie-poster-wall, .movie-table tbody');
 
     // Remove the old infinite scroll sentinel
     var oldSentinel = container.querySelector('.infinite-scroll-sentinel');
@@ -1847,7 +1967,7 @@ function appendMoreCards(tabId, fromIndex, toIndex) {
         gridContainer.insertAdjacentHTML('beforeend', newCardsHtml);
     } else {
         // No grid found, create one
-        var gridClass = currentView === 'detail' ? 'movie-detail-grid' : (currentView === 'list' ? 'movie-list' : 'movie-grid');
+        var gridClass = currentView === 'detail' ? 'movie-detail-grid' : (currentView === 'list' ? 'movie-list' : (currentView === 'compact' ? 'movie-compact-grid' : (currentView === 'posters' ? 'movie-poster-wall' : (currentView === 'table' ? 'movie-table-wrapper' : 'movie-grid'))));
         if (tabId === 'tvshows') gridClass = 'movie-grid tvshow-grid';
         container.insertAdjacentHTML('beforeend', '<div class="' + gridClass + '">' + newCardsHtml + '</div>');
     }
