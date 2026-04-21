@@ -49,7 +49,19 @@ function _esc(s) {
 // COLLECTION CARD POSTER LOADING
 // Load up to 4 poster images per collection card directly (not lazy, since
 // there are typically far fewer collection cards than movie cards)
+// Uses loadPosterForMovie which caches as data URLs in IndexedDB, avoiding
+// blob URL accumulation that causes memory leaks.
 // ============================================================================
+
+// Track collection poster blob URLs so they can be revoked on re-render
+var _collectionPosterUrls = [];
+
+function _revokeCollectionPosterUrls() {
+    for (var i = 0; i < _collectionPosterUrls.length; i++) {
+        URL.revokeObjectURL(_collectionPosterUrls[i]);
+    }
+    _collectionPosterUrls = [];
+}
 
 function _loadCollectionCardPosters(collections) {
     collections.forEach(function(col, colIdx) {
@@ -61,14 +73,39 @@ function _loadCollectionCardPosters(collections) {
                 );
                 if (!img) return;
 
-                if (m.posterUrl) {
+                // Use loadPosterForMovie which properly caches posters as data URLs,
+                // avoiding blob URL memory leaks
+                if (window.loadPosterForMovie) {
+                    window.loadPosterForMovie(m).then(function(url) {
+                        if (url) {
+                            img.src = url;
+                            img.style.opacity = '1';
+                        }
+                    }).catch(function() {
+                        // Fallback: load directly (still tracked for cleanup)
+                        if (m.posterHandle) {
+                            m.posterHandle.getFile().then(function(f) {
+                                var blobUrl = URL.createObjectURL(f);
+                                // Revoke old poster URL if it was a blob
+                                if (m.posterUrl && m.posterUrl.startsWith('blob:')) {
+                                    URL.revokeObjectURL(m.posterUrl);
+                                }
+                                m.posterUrl = blobUrl;
+                                _collectionPosterUrls.push(blobUrl);
+                                img.src = blobUrl;
+                                img.style.opacity = '1';
+                            }).catch(function() {});
+                        }
+                    });
+                } else if (m.posterUrl) {
                     img.src = m.posterUrl;
                     img.style.opacity = '1';
                 } else if (m.posterHandle) {
                     m.posterHandle.getFile().then(function(f) {
-                        var url = URL.createObjectURL(f);
-                        m.posterUrl = url;
-                        img.src = url;
+                        var blobUrl = URL.createObjectURL(f);
+                        m.posterUrl = blobUrl;
+                        _collectionPosterUrls.push(blobUrl);
+                        img.src = blobUrl;
                         img.style.opacity = '1';
                     }).catch(function() {});
                 }
@@ -82,6 +119,7 @@ function _loadCollectionCardPosters(collections) {
 // ============================================================================
 
 function renderCollections() {
+    _revokeCollectionPosterUrls();
     var collections = _buildCollectionsData();
     var container = document.getElementById('collectionsContainer');
     var countEl = document.getElementById('collectionsCount');

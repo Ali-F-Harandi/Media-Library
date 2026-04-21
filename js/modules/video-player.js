@@ -50,6 +50,12 @@ var loadedSubtitleFiles = new Map();
 /** Current subtitle delay offset in seconds (positive = subtitles appear later) */
 var subtitleDelayOffset = 0;
 
+/** LocalStorage key prefix for persisting subtitle delay per video */
+var SUBTITLE_DELAY_KEY_PREFIX = 'subtitleDelay_';
+
+/** Current video title for subtitle delay persistence */
+var currentVideoTitleForDelay = '';
+
 /** Original VTT content before delay adjustment (for re-applying delay) */
 var originalSubtitleVtt = null;
 
@@ -58,6 +64,9 @@ var currentSubtitleLabel = '';
 
 /** Current subtitle srclang for re-applying delay */
 var currentSubtitleSrclang = '';
+
+/** Current subtitle blob URL (for memory cleanup when delay changes or player closes) */
+var currentSubtitleBlobUrl = null;
 
 /** LocalStorage key for persisting preferred subtitle size */
 var SUBTITLE_SIZE_KEY = 'movieLibSubtitleSize';
@@ -195,6 +204,97 @@ function convertSrtToVtt(srtText) {
 }
 
 /**
+ * Convert ASS/SSA subtitle format to WebVTT format
+ * Parses ASS events and extracts start/end times and text
+ * Strips ASS formatting tags ({\...}) and converts \N to newlines
+ * 
+ * @param {string} assText - Raw ASS/SSA subtitle content
+ * @returns {string} Converted VTT subtitle content
+ */
+function convertAssToVtt(assText) {
+    var lines = assText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    var vttLines = ['WEBVTT', ''];
+    var counter = 1;
+    var inEvents = false;
+    
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        
+        // Detect [Events] section
+        if (line.toLowerCase() === '[events]') {
+            inEvents = true;
+            continue;
+        }
+        // Leave events section if we hit another section
+        if (line.startsWith('[') && line.endsWith(']')) {
+            inEvents = false;
+            continue;
+        }
+        
+        if (!inEvents) continue;
+        
+        // Skip Format line and comments
+        if (line.startsWith('Format:') || line.startsWith(';')) continue;
+        
+        // Parse Dialogue lines
+        if (line.startsWith('Dialogue:')) {
+            var parts = line.substring(9).split(',');
+            // ASS format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+            // We need at least Start (index 1), End (index 2), and Text (index 9+)
+            if (parts.length < 10) continue;
+            
+            var start = parts[1].trim();
+            var end = parts[2].trim();
+            
+            // Convert ASS timestamp (H:MM:SS.CC) to VTT timestamp (HH:MM:SS.mmm)
+            var startVtt = convertAssTimestamp(start);
+            var endVtt = convertAssTimestamp(end);
+            
+            // Text is everything after the 9th comma (text may contain commas)
+            var textParts = parts.slice(9);
+            var text = textParts.join(',');
+            
+            // Clean up ASS formatting tags: {\...}
+            text = text.replace(/\{[^}]*\}/g, '');
+            // Convert \N and \n to newlines
+            text = text.replace(/\\N/g, '\n').replace(/\\n/g, '\n');
+            // Remove leading/trailing whitespace
+            text = text.trim();
+            
+            // Skip empty text entries
+            if (!text) continue;
+            
+            vttLines.push(String(counter));
+            vttLines.push(startVtt + ' --> ' + endVtt);
+            vttLines.push(text);
+            vttLines.push('');
+            counter++;
+        }
+    }
+    
+    return vttLines.join('\n').trim();
+}
+
+/**
+ * Convert ASS timestamp (H:MM:SS.CC) to VTT timestamp (HH:MM:SS.mmm)
+ * ASS uses centiseconds (2 digits), VTT uses milliseconds (3 digits)
+ * 
+ * @param {string} ts - ASS timestamp like "1:23:45.67"
+ * @returns {string} VTT timestamp like "01:23:45.670"
+ */
+function convertAssTimestamp(ts) {
+    var match = ts.match(/(\d+):(\d{2}):(\d{2})\.(\d{2})/);
+    if (!match) return '00:00:00.000';
+    var h = match[1].padStart(2, '0');
+    var m = match[2];
+    var s = match[3];
+    var cs = match[4];
+    // Convert centiseconds to milliseconds (e.g., 67 -> 670)
+    var ms = cs + '0';
+    return h + ':' + m + ':' + s + '.' + ms;
+}
+
+/**
  * Extract language name from subtitle filename
  * Detects language codes (en, eng, es, spa, etc.) and returns human-readable name
  * Supports ISO 639-1 (2-letter) and ISO 639-2 (3-letter) language codes
@@ -298,8 +398,14 @@ window.adjustSubtitleDelay = function(seconds) {
                 video.removeChild(video.firstChild);
             }
             
+            // Revoke previous subtitle blob URL to prevent memory leak
+            if (currentSubtitleBlobUrl) {
+                URL.revokeObjectURL(currentSubtitleBlobUrl);
+            }
+            
             var blob = new Blob([delayedVtt], { type: 'text/vtt' });
             var url = URL.createObjectURL(blob);
+            currentSubtitleBlobUrl = url;
             var track = document.createElement('track');
             track.kind = 'subtitles';
             track.label = currentSubtitleLabel;
@@ -319,6 +425,17 @@ window.adjustSubtitleDelay = function(seconds) {
     
     var sign = subtitleDelayOffset >= 0 ? '+' : '';
     showPlayerToast('Subtitle Delay: ' + sign + subtitleDelayOffset.toFixed(1) + 's');
+    
+    // Save subtitle delay to localStorage for persistence across sessions
+    if (currentVideoTitleForDelay) {
+        try {
+            if (subtitleDelayOffset === 0) {
+                localStorage.removeItem(SUBTITLE_DELAY_KEY_PREFIX + currentVideoTitleForDelay);
+            } else {
+                localStorage.setItem(SUBTITLE_DELAY_KEY_PREFIX + currentVideoTitleForDelay, subtitleDelayOffset.toString());
+            }
+        } catch(e) {}
+    }
 };
 
 // ============================================================================
@@ -449,7 +566,49 @@ function playerKeydownHandler(e) {
     } else if (key === 'ArrowDown' && e.shiftKey) {
         e.preventDefault();
         window.adjustSubtitleDelay(0.5);
+    } else if (key === '?' || (key === '/' && e.shiftKey)) {
+        e.preventDefault();
+        togglePlayerShortcutOverlay();
     }
+}
+
+/**
+ * Toggle the keyboard shortcut overlay inside the player
+ * Shows available shortcuts when user presses ?
+ */
+function togglePlayerShortcutOverlay() {
+    var existing = document.querySelector('.player-shortcut-overlay');
+    if (existing) {
+        existing.remove();
+        return;
+    }
+    
+    var playerContainer = document.querySelector('.player-container');
+    if (!playerContainer) return;
+    
+    var overlay = document.createElement('div');
+    overlay.className = 'player-shortcut-overlay';
+    overlay.innerHTML = 
+        '<div class="player-shortcut-grid">' +
+            '<div class="player-shortcut-item"><span class="player-shortcut-key">Space</span>Play/Pause</div>' +
+            '<div class="player-shortcut-item"><span class="player-shortcut-key">F</span>Fullscreen</div>' +
+            '<div class="player-shortcut-item"><span class="player-shortcut-key">M</span>Mute</div>' +
+            '<div class="player-shortcut-item"><span class="player-shortcut-key">C</span>Cycle Subtitles</div>' +
+            '<div class="player-shortcut-item"><span class="player-shortcut-key">A</span>Cycle Audio</div>' +
+            '<div class="player-shortcut-item"><span class="player-shortcut-key">←</span>Previous</div>' +
+            '<div class="player-shortcut-item"><span class="player-shortcut-key">→</span>Next</div>' +
+            '<div class="player-shortcut-item"><span class="player-shortcut-key">Shift+←</span>-30s</div>' +
+            '<div class="player-shortcut-item"><span class="player-shortcut-key">Shift+→</span>+30s</div>' +
+            '<div class="player-shortcut-item"><span class="player-shortcut-key">Shift+↑</span>Sub -0.5s</div>' +
+            '<div class="player-shortcut-item"><span class="player-shortcut-key">Shift+↓</span>Sub +0.5s</div>' +
+            '<div class="player-shortcut-item"><span class="player-shortcut-key">Esc</span>Close Player</div>' +
+        '</div>';
+    
+    overlay.addEventListener('click', function() { overlay.remove(); });
+    playerContainer.appendChild(overlay);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(function() { if (overlay.parentElement) overlay.remove(); }, 5000);
 }
 
 /**
@@ -662,8 +821,7 @@ async function handleSubtitleFileLoad(file) {
         if (lowerName.endsWith('.srt')) {
             blobContent = convertSrtToVtt(content);
         } else if (lowerName.endsWith('.ass') || lowerName.endsWith('.ssa')) {
-            showPlayerToast('ASS/SSA subtitles may not display correctly');
-            blobContent = convertSrtToVtt(content);
+            blobContent = convertAssToVtt(content);
         }
         
         // Store original VTT for delay adjustment
@@ -682,8 +840,14 @@ async function handleSubtitleFileLoad(file) {
             video.removeChild(video.firstChild);
         }
         
+        // Revoke previous subtitle blob URL to prevent memory leak
+        if (currentSubtitleBlobUrl) {
+            URL.revokeObjectURL(currentSubtitleBlobUrl);
+        }
+        
         var blob = new Blob([blobContent], { type: 'text/vtt' });
         var url = URL.createObjectURL(blob);
+        currentSubtitleBlobUrl = url;
         var track = document.createElement('track');
         track.kind = 'subtitles';
         track.label = currentSubtitleLabel;
@@ -802,9 +966,22 @@ async function setupWebPlayer(movie, videoUrl) {
     // Show the player modal by adding active class
     modal.classList.add('active');
     
-    // Reset subtitle delay for new video
+    // Reset subtitle delay for new video, then check for saved delay
     subtitleDelayOffset = 0;
     originalSubtitleVtt = null;
+    currentVideoTitleForDelay = movie.title;
+    
+    // Restore saved subtitle delay from localStorage
+    var savedDelay = null;
+    try { savedDelay = localStorage.getItem(SUBTITLE_DELAY_KEY_PREFIX + movie.title); } catch(e) {}
+    if (savedDelay !== null) {
+        var parsedDelay = parseFloat(savedDelay);
+        if (!isNaN(parsedDelay) && parsedDelay !== 0) {
+            subtitleDelayOffset = parsedDelay;
+            var delaySign = parsedDelay >= 0 ? '+' : '';
+            showPlayerToast('Subtitle delay restored: ' + delaySign + parsedDelay.toFixed(1) + 's');
+        }
+    }
     
     // Ensure audio button is always visible
     ensureAudioButtonExists();
@@ -1061,13 +1238,13 @@ async function loadSubtitlesForMovie(movie, videoElement) {
             // Match subtitles that share the movie title or video filename
             const movieTitleClean = movie.title.toLowerCase().replace(/[^a-z0-9]/g, '');
             const videoBaseName = movie.fileName.toLowerCase().replace(/\.[^.]+$/, '');
+            const subtitleBaseName = lowerName.replace(/\.[^.]+$/, '');
             const isRelated = lowerName.includes(movieTitleClean) ||
                              lowerName.includes(videoBaseName) ||
-                             // Also match generic subtitle names (e.g., movie.srt, eng.srt)
-                             lowerName.replace(/\.[^.]+$/, '').endsWith('.srt') === false;
+                             // Also match generic subtitle names that are just language codes (e.g., en.srt, eng.srt)
+                             /^[a-z]{2,3}$/.test(subtitleBaseName);
             
-            if (isSubtitle) {
-                // Include all subtitle files in the folder (user can select the right one)
+            if (isSubtitle && isRelated) {
                 subtitleFiles.push(entry);
             }
         }
@@ -1251,9 +1428,8 @@ window.loadSubtitle = async function(index, filename) {
             // Convert SRT to VTT format for browser compatibility
             blobContent = convertSrtToVtt(content);
         } else if (lowerName.endsWith('.ass') || lowerName.endsWith('.ssa')) {
-            // ASS/SSA not fully supported by browsers - try as VTT
-            window.Utils.showToast('ASS/SSA subtitles may not display correctly', 'warning');
-            blobContent = convertSrtToVtt(content); // best effort
+            // Convert ASS/SSA to VTT format
+            blobContent = convertAssToVtt(content);
         }
 
         // Store original VTT for delay adjustment
@@ -1271,10 +1447,16 @@ window.loadSubtitle = async function(index, filename) {
             video.removeChild(video.firstChild);
         }
 
+        // Revoke previous subtitle blob URL to prevent memory leak
+        if (currentSubtitleBlobUrl) {
+            URL.revokeObjectURL(currentSubtitleBlobUrl);
+        }
+
         // Create blob URL for subtitle
         const blob = new Blob([blobContent], { type: 'text/vtt' });
         const url = URL.createObjectURL(blob);
-        
+        currentSubtitleBlobUrl = url;
+
         // Create and configure track element
         const track = document.createElement('track');
         track.kind = 'subtitles';
@@ -1354,6 +1536,12 @@ function closePlayer() {
         currentVideoUrl = null;
     }
     
+    // Revoke subtitle blob URL to free memory
+    if (currentSubtitleBlobUrl) {
+        URL.revokeObjectURL(currentSubtitleBlobUrl);
+        currentSubtitleBlobUrl = null;
+    }
+    
     // Clear global references
     window.currentSubtitleFiles = null;
     window.currentVideoElement = null;
@@ -1367,6 +1555,7 @@ function closePlayer() {
     originalSubtitleVtt = null;
     currentSubtitleLabel = '';
     currentSubtitleSrclang = '';
+    currentVideoTitleForDelay = '';
     audioTracksAvailable = false;
     
     // Remove drag-over class
@@ -1378,7 +1567,7 @@ function closePlayer() {
     // Remove keyboard shortcut handler
     document.removeEventListener('keydown', playerKeydownHandler);
     
-    document.getElementById('playerModal').classList.remove('active');
+    if (playerModal) playerModal.classList.remove('active');
 }
 
 // ============================================================================
@@ -1491,9 +1680,22 @@ async function setupTVShowPlayer(show, season, episode, videoUrl) {
     // Show the player modal
     modal.classList.add('active');
     
-    // Reset subtitle delay for new video
+    // Reset subtitle delay for new video, then check for saved delay
     subtitleDelayOffset = 0;
     originalSubtitleVtt = null;
+    currentVideoTitleForDelay = show.title;
+    
+    // Restore saved subtitle delay from localStorage
+    var savedTVDelay = null;
+    try { savedTVDelay = localStorage.getItem(SUBTITLE_DELAY_KEY_PREFIX + show.title); } catch(e) {}
+    if (savedTVDelay !== null) {
+        var parsedTVDelay = parseFloat(savedTVDelay);
+        if (!isNaN(parsedTVDelay) && parsedTVDelay !== 0) {
+            subtitleDelayOffset = parsedTVDelay;
+            var tvDelaySign = parsedTVDelay >= 0 ? '+' : '';
+            showPlayerToast('Subtitle delay restored: ' + tvDelaySign + parsedTVDelay.toFixed(1) + 's');
+        }
+    }
     
     // Ensure audio button is always visible
     ensureAudioButtonExists();

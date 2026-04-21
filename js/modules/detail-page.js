@@ -19,6 +19,9 @@ var currentTVShowIdx = -1;
 // rapidly (e.g., clicking multiple cards). Only the most recent render wins.
 var _detailRenderId = 0;
 
+// Track actor Object URLs created by the detail page so they can be revoked on close
+var _detailActorUrls = [];
+
 // Define function using var to ensure it's available before assignment
 var showDetailPage = async function(idx) {
     var m = window.filteredMovies[idx];
@@ -118,6 +121,36 @@ async function showMovieDetailPage(idx, renderId) {
         '</div>';
     }
 
+    // Watch progress indicator in hero section
+    if (typeof window.getPlaybackPosition === 'function') {
+        var _savedPos = window.getPlaybackPosition(m.title);
+        if (_savedPos && _savedPos.position && _savedPos.duration && _savedPos.position > 5) {
+            var _watchPct = Math.min(100, Math.round((_savedPos.position / _savedPos.duration) * 100));
+            if (_watchPct > 0 && _watchPct < 95) {
+                var _watchTimeStr = '';
+                var _wh = Math.floor(_savedPos.position / 3600);
+                var _wm = Math.floor((_savedPos.position % 3600) / 60);
+                var _ws = Math.floor(_savedPos.position % 60);
+                _watchTimeStr = _wh > 0 ? _wh + ':' + String(_wm).padStart(2, '0') + ':' + String(_ws).padStart(2, '0') : _wm + ':' + String(_ws).padStart(2, '0');
+                html += '<div class="detail-watch-progress">' +
+                    '<div class="detail-watch-progress-header">' +
+                        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>' +
+                        '<span class="detail-watch-progress-label">Watched ' + _watchPct + '%</span>' +
+                        '<span class="detail-watch-progress-time">' + _watchTimeStr + ' / ';
+                var _dh = Math.floor(_savedPos.duration / 3600);
+                var _dm = Math.floor((_savedPos.duration % 3600) / 60);
+                var _ds = Math.floor(_savedPos.duration % 60);
+                var _durStr = _dh > 0 ? _dh + ':' + String(_dm).padStart(2, '0') + ':' + String(_ds).padStart(2, '0') : _dm + ':' + String(_ds).padStart(2, '0');
+                html += _durStr + '</span>' +
+                    '</div>' +
+                    '<div class="detail-watch-progress-bar">' +
+                        '<div class="detail-watch-progress-fill" style="width:' + _watchPct + '%"></div>' +
+                    '</div>' +
+                '</div>';
+            }
+        }
+    }
+
     html += '<div class="detail-hero-actions">' +
         '<button class="detail-play-btn" onclick="playMovie(' + idx + ')">' +
             '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>' +
@@ -192,12 +225,19 @@ async function showMovieDetailPage(idx, renderId) {
     html += buildTechSpecs(nfo);
     html += buildTagsSection(nfo);
     html += await buildCastSection(m, nfo);
+    html += buildMoreLikeThis(m);
 
     // Race condition guard: if a newer render started while we were awaiting,
     // discard this render to prevent overwriting the newer content
     if (renderId !== undefined && renderId !== _detailRenderId) return;
 
     body.innerHTML = html;
+
+    // Observe poster images in More Like This section for lazy loading
+    if (window.UIRenderer && typeof window.UIRenderer.observeImages === 'function') {
+        var mltGrid = body.querySelector('.more-like-this-grid');
+        if (mltGrid) window.UIRenderer.observeImages(mltGrid);
+    }
 
     var page = document.getElementById('detailPage');
     page.scrollTop = 0;
@@ -368,12 +408,19 @@ async function showTVShowDetailPage(idx, renderId) {
     html += buildTVShowInfoSection(m, nfo);
     html += buildTagsSection(nfo);
     html += await buildCastSection(m, nfo);
+    html += buildMoreLikeThis(m);
 
     // Race condition guard: if a newer render started while we were awaiting,
     // discard this render to prevent overwriting the newer content
     if (renderId !== undefined && renderId !== _detailRenderId) return;
 
     body.innerHTML = html;
+
+    // Observe poster images in More Like This section for lazy loading
+    if (window.UIRenderer && typeof window.UIRenderer.observeImages === 'function') {
+        var mltGrid = body.querySelector('.more-like-this-grid');
+        if (mltGrid) window.UIRenderer.observeImages(mltGrid);
+    }
 
     // Load the initial season poster
     loadSeasonPoster(m, 0);
@@ -753,6 +800,7 @@ async function buildCastSection(m, nfo) {
                         if (!a.localActorUrl) {
                             var localFile = await m.actorImages[variant].getFile();
                             a.localActorUrl = URL.createObjectURL(localFile);
+                            _detailActorUrls.push(a.localActorUrl);
                         }
                         actorImgHtml = '<img src="' + a.localActorUrl + '" onerror="this.onerror=null;this.src=\'' + ACTOR_PLACEHOLDER + '\';">';
                         hasLocalImage = true;
@@ -780,6 +828,81 @@ async function buildCastSection(m, nfo) {
 }
 
 // ============================================================================
+// MORE LIKE THIS - Recommendations based on shared genres
+// ============================================================================
+
+function buildMoreLikeThis(movie) {
+    if (!window.allMovies || !movie || !movie.nfoData || !movie.nfoData.genres || !movie.nfoData.genres.length) return '';
+
+    var currentGenres = movie.nfoData.genres;
+    var similar = [];
+
+    window.allMovies.forEach(function(m) {
+        // Skip the current movie itself
+        if (m.title === movie.title && m.year === movie.year) return;
+
+        var sharedCount = 0;
+        if (m.nfoData && m.nfoData.genres) {
+            m.nfoData.genres.forEach(function(g) {
+                if (currentGenres.indexOf(g) !== -1) sharedCount++;
+            });
+        }
+
+        if (sharedCount > 0) {
+            var rating = (m.nfoData && m.nfoData.rating) || 0;
+            similar.push({ movie: m, sharedCount: sharedCount, rating: rating });
+        }
+    });
+
+    if (similar.length === 0) return '';
+
+    // Sort by shared genres (desc), then by rating (desc)
+    similar.sort(function(a, b) {
+        if (b.sharedCount !== a.sharedCount) return b.sharedCount - a.sharedCount;
+        return b.rating - a.rating;
+    });
+
+    // Limit to 8 recommendations
+    similar = similar.slice(0, 8);
+
+    var html = '<div class="more-like-this-section detail-section">' +
+        '<div class="detail-section-title">' +
+            '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>' +
+            'More Like This' +
+        '</div>' +
+        '<div class="more-like-this-grid">';
+
+    similar.forEach(function(item) {
+        var m = item.movie;
+        var realIdx = window.allMovies.indexOf(m);
+        var hasPoster = !!m.posterHandle;
+        var r = m.nfoData && m.nfoData.rating;
+        var sharedLabel = item.sharedCount + ' shared genre' + (item.sharedCount !== 1 ? 's' : '');
+
+        html += '<div class="more-like-this-card" onclick="showItemFromTab(' + realIdx + ',\'detail\')" title="' + window.Utils.escHtml(m.title) + ' (' + sharedLabel + ')">' +
+            '<div class="more-like-this-poster">' +
+                '<img class="poster-img" data-movie-idx="' + realIdx + '">' +
+                '<div class="no-poster-placeholder"' + (hasPoster ? ' style="display:none"' : '') + '>' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
+                        '<rect x="3" y="3" width="18" height="18" rx="2"/>' +
+                        '<circle cx="8.5" cy="8.5" r="1.5"/>' +
+                        '<path d="m21 15-5-5L5 21"/>' +
+                    '</svg>' +
+                '</div>' +
+                (r ? '<span class="more-like-this-rating">\u2605 ' + r.toFixed(1) + '</span>' : '') +
+            '</div>' +
+            '<div class="more-like-this-info">' +
+                '<div class="more-like-this-title">' + window.Utils.escHtml(m.title) + '</div>' +
+                '<div class="more-like-this-year">' + m.year + '</div>' +
+            '</div>' +
+        '</div>';
+    });
+
+    html += '</div></div>';
+    return html;
+}
+
+// ============================================================================
 // GLOBAL FUNCTIONS
 // ============================================================================
 
@@ -788,6 +911,13 @@ var closeDetailPage = function() {
     page.classList.remove('active');
     var bgEl = document.getElementById('detailPageBg');
     if (bgEl) bgEl.classList.remove('loaded');
+
+    // Revoke actor Object URLs to prevent memory leak
+    for (var i = 0; i < _detailActorUrls.length; i++) {
+        URL.revokeObjectURL(_detailActorUrls[i]);
+    }
+    _detailActorUrls = [];
+
     currentTVShowIdx = -1;
     currentSeasonIndex = 0;
 };

@@ -10,6 +10,95 @@ var STATS_COLORS = [
     '#9c27b0', '#e91e63', '#00bcd4', '#8bc34a', '#ff5722'
 ];
 
+/**
+ * Render an interactive Genre Cloud - a visual tag cloud where each genre
+ * is displayed as a pill/badge sized proportionally to how many movies have that genre.
+ * Clicking a genre filters the library to show only that genre.
+ */
+function renderGenreCloud() {
+    if (!window.allMovies || window.allMovies.length === 0) return '';
+
+    var genreMap = {};
+    window.allMovies.forEach(function(m) {
+        if (m.nfoData && m.nfoData.genres) {
+            m.nfoData.genres.forEach(function(g) {
+                genreMap[g] = (genreMap[g] || 0) + 1;
+            });
+        }
+    });
+
+    var genres = Object.keys(genreMap).sort(function(a, b) { return genreMap[b] - genreMap[a]; });
+    if (genres.length === 0) return '';
+
+    var maxCount = genreMap[genres[0]];
+    var minSize = 0.75;
+    var maxSize = 1.6;
+
+    var html = '<div class="stats-section">' +
+        '<h3 class="stats-section-title">' +
+            '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>' +
+            'Genre Cloud' +
+        '</h3>' +
+        '<div class="genre-cloud">';
+
+    genres.forEach(function(genre, idx) {
+        var count = genreMap[genre];
+        var ratio = maxCount > 1 ? (count - 1) / (maxCount - 1) : 1;
+        var size = minSize + ratio * (maxSize - minSize);
+        var color = STATS_COLORS[idx % STATS_COLORS.length];
+        var opacity = 0.6 + ratio * 0.4;
+
+        html += '<span class="genre-cloud-item" ' +
+            'style="font-size:' + size.toFixed(2) + 'rem;background:' + color + ';opacity:' + opacity.toFixed(2) + '" ' +
+            'onclick="filterByGenreFromStats(\'' + window.Utils.escHtml(genre).replace(/'/g, "\\'") + '\')" ' +
+            'title="' + count + ' title' + (count !== 1 ? 's' : '') + '">' +
+            window.Utils.escHtml(genre) +
+            '<span class="genre-cloud-count">' + count + '</span>' +
+        '</span>';
+    });
+
+    html += '</div></div>';
+    return html;
+}
+
+/**
+ * Filter library by genre from the Stats tab Genre Cloud
+ * Sets the genre filter and switches to the All tab
+ */
+window.filterByGenreFromStats = function(genre) {
+    // Set the genre filter select
+    var genreSelect = document.getElementById('genreFilterSelect');
+    if (genreSelect) {
+        genreSelect.value = genre;
+    }
+    // Use the multi-genre tag system
+    if (typeof window.toggleGenreTag === 'function') {
+        // Clear existing selections first
+        var container = document.getElementById('genreFilterTags');
+        if (container) {
+            container.querySelectorAll('.genre-tag').forEach(function(tag) {
+                tag.classList.remove('active');
+                if (tag.dataset.genre === 'all') {
+                    tag.classList.add('active');
+                }
+            });
+        }
+        // Reset internal set and add just this genre
+        if (typeof window._selectedGenres !== 'undefined') {
+            window._selectedGenres.clear();
+            window._selectedGenres.add(genre);
+        }
+    }
+    // Trigger the genre filter change handler
+    if (typeof window.handleGenreFilterChange === 'function') {
+        window.handleGenreFilterChange();
+    }
+    // Switch to the All tab
+    if (typeof window.switchTab === 'function') {
+        window.switchTab('all');
+    }
+};
+
 window.renderLibraryStats = function() {
     var statsContainer = document.getElementById('statsContainer');
     if (!statsContainer) return;
@@ -60,15 +149,18 @@ window.renderLibraryStats = function() {
     var maxQualityCount = qualityKeys.length > 0 ? qualityMap[qualityKeys[0]] : 1;
 
     // File size distribution
-    var sizeMap = { 'Small (<1GB)': 0, 'Medium (1-10GB)': 0, 'Large (>10GB)': 0 };
+    var sizeMap = { 'Small (<1GB)': 0, 'Medium (1-5GB)': 0, 'Large (5-15GB)': 0, 'Huge (>15GB)': 0 };
     window.allMovies.forEach(function(m) {
         var size = m.fileSize || 0;
-        if (size < 1073741824) { // < 1GB
+        var oneGB = 1073741824;
+        if (size < oneGB) { // < 1GB
             sizeMap['Small (<1GB)']++;
-        } else if (size < 10737418240) { // < 10GB
-            sizeMap['Medium (1-10GB)']++;
-        } else {
-            sizeMap['Large (>10GB)']++;
+        } else if (size < 5 * oneGB) { // 1-5GB
+            sizeMap['Medium (1-5GB)']++;
+        } else if (size < 15 * oneGB) { // 5-15GB
+            sizeMap['Large (5-15GB)']++;
+        } else { // > 15GB
+            sizeMap['Huge (>15GB)']++;
         }
     });
     var sizeKeys = Object.keys(sizeMap);
@@ -126,6 +218,11 @@ window.renderLibraryStats = function() {
     }
 
     html += '</div>'; // end stats-overview
+
+    // ========================================================================
+    // Genre Cloud - interactive tag cloud sized by count
+    // ========================================================================
+    html += renderGenreCloud();
 
     // ========================================================================
     // Genre Distribution - horizontal bars with percentages and colors
@@ -198,7 +295,7 @@ window.renderLibraryStats = function() {
             '</h3>' +
             '<div class="stats-bars">';
 
-        var sizeColors = ['#4caf50', '#ffc107', '#e50914'];
+        var sizeColors = ['#4caf50', '#ffc107', '#ff6b35', '#e50914'];
         sizeKeys.forEach(function(k, idx) {
             var count = sizeMap[k];
             var pctOfTotal = Math.round((count / totalCount) * 100);
@@ -242,6 +339,44 @@ window.renderLibraryStats = function() {
                 '</div>' +
                 '<span class="stats-bar-pct">' + pctOfTotal + '%</span>' +
                 '<span class="stats-bar-count">' + count + '</span>' +
+            '</div>';
+        });
+
+        html += '</div></div>';
+    }
+
+    // ========================================================================
+    // Year Distribution (Last 50 Years) - individual year bars by decade
+    // ========================================================================
+    var currentYear = new Date().getFullYear();
+    var yearStart = currentYear - 49;
+    var yearMapRecent = {};
+    window.allMovies.forEach(function(m) {
+        var year = parseInt(m.year);
+        if (year >= yearStart && year <= currentYear) {
+            yearMapRecent[year] = (yearMapRecent[year] || 0) + 1;
+        }
+    });
+    var yearKeysRecent = Object.keys(yearMapRecent).sort();
+    var maxYearRecentCount = yearKeysRecent.length > 0 ? Math.max.apply(null, yearKeysRecent.map(function(y) { return yearMapRecent[y]; })) : 1;
+
+    if (yearKeysRecent.length > 0) {
+        html += '<div class="stats-section">' +
+            '<h3 class="stats-section-title">' +
+                '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
+                'Year Distribution (Last 50 Years)' +
+            '</h3>' +
+            '<div class="stats-chart">';
+
+        yearKeysRecent.forEach(function(year, idx) {
+            var count = yearMapRecent[year];
+            var barHeight = Math.round((count / maxYearRecentCount) * 100);
+            var color = STATS_COLORS[(idx + 7) % STATS_COLORS.length];
+
+            html += '<div class="stats-bar stats-bar-vertical">' +
+                '<div class="stats-bar-fill-vertical" style="height:' + barHeight + '%;background:' + color + ';animation:barGrow 0.6s ease-out ' + (idx * 0.03) + 's both"></div>' +
+                '<span class="stats-bar-label-vertical">' + (year % 100 < 10 ? '0' : '') + (year % 100) + '</span>' +
+                '<span class="stats-bar-count-vertical">' + count + '</span>' +
             '</div>';
         });
 

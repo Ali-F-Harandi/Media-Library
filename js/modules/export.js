@@ -49,10 +49,10 @@ window.exportLibrary = function(format) {
 };
 
 /**
- * Export library data as JSON
+ * Export library data as JSON (includes metadata: favorites, history, playlist)
  */
 function exportAsJSON() {
-    var data = window.allMovies.map(function(m) {
+    var movies = window.allMovies.map(function(m) {
         return {
             title: m.title,
             year: m.year || '',
@@ -69,6 +69,17 @@ function exportAsJSON() {
             fileName: m.fileName || ''
         };
     });
+    var data = {
+        _meta: {
+            exportedAt: new Date().toISOString(),
+            version: '2.1',
+            type: 'bilkos-media-library-export'
+        },
+        movies: movies,
+        favorites: (typeof window.getFavorites === 'function') ? window.getFavorites() : [],
+        watchHistory: (typeof window.getWatchHistory === 'function') ? window.getWatchHistory() : [],
+        playlist: (typeof window.getPlaylist === 'function') ? window.getPlaylist() : []
+    };
     return JSON.stringify(data, null, 2);
 }
 
@@ -172,4 +183,165 @@ document.addEventListener('click', function(e) {
     }
 });
 
-window.Export = { exportLibrary: window.exportLibrary, toggleExportDropdown: window.toggleExportDropdown };
+/**
+ * Import library metadata from a previously exported JSON file.
+ * Restores favorites, watch history, and playlist data.
+ */
+window.importLibrary = function() {
+    // Create a hidden file input element if not already created
+    var fileInput = document.getElementById('importFileInput');
+    if (!fileInput) {
+        fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.id = 'importFileInput';
+        fileInput.accept = '.json';
+        fileInput.style.display = 'none';
+        document.body.appendChild(fileInput);
+
+        fileInput.addEventListener('change', function(e) {
+            var file = e.target.files[0];
+            if (!file) return;
+
+            // Reset input so the same file can be re-imported
+            fileInput.value = '';
+
+            // Validate file type
+            if (!file.name.endsWith('.json')) {
+                window.Utils.showToast('Please select a .json file', 'error');
+                return;
+            }
+
+            var reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    var data = JSON.parse(evt.target.result);
+                    var imported = importLibraryData(data);
+                    if (imported) {
+                        window.Utils.showToast('Library imported successfully! (' + imported + ' items restored)', 'success');
+                        // Refresh the current view
+                        if (typeof window.switchTab === 'function') {
+                            var activeTab = document.querySelector('.nav-tab.active');
+                            if (activeTab) {
+                                window.switchTab(activeTab.dataset.tab);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    window.Utils.showToast('Invalid JSON file: ' + err.message, 'error');
+                }
+            };
+            reader.onerror = function() {
+                window.Utils.showToast('Failed to read file', 'error');
+            };
+            reader.readAsText(file);
+        });
+    }
+
+    fileInput.click();
+};
+
+/**
+ * Validate and import library data from parsed JSON
+ * @param {object} data - Parsed JSON data
+ * @returns {number|false} - Number of items imported, or false on validation failure
+ */
+function importLibraryData(data) {
+    if (!data || typeof data !== 'object') {
+        window.Utils.showToast('Invalid file structure: not a valid JSON object', 'error');
+        return false;
+    }
+
+    var totalImported = 0;
+
+    // Detect format: v2.1 export with _meta wrapper or legacy array format
+    var favorites = null;
+    var watchHistory = null;
+    var playlist = null;
+
+    if (data._meta && data._meta.type === 'bilkos-media-library-export') {
+        // New format with metadata wrapper
+        favorites = data.favorites;
+        watchHistory = data.watchHistory;
+        playlist = data.playlist;
+    } else if (Array.isArray(data)) {
+        // Legacy format — array of movies, no metadata to import
+        window.Utils.showToast('This file contains only movie data (legacy format). No metadata to import.', 'warning');
+        return false;
+    } else {
+        // Try to extract from any object with these keys
+        favorites = data.favorites;
+        watchHistory = data.watchHistory || data.watch_history;
+        playlist = data.playlist;
+    }
+
+    // Import favorites
+    if (Array.isArray(favorites)) {
+        var currentFavs = (typeof window.getFavorites === 'function') ? window.getFavorites() : [];
+        var newFavCount = 0;
+        favorites.forEach(function(title) {
+            if (typeof title === 'string' && currentFavs.indexOf(title) === -1) {
+                currentFavs.push(title);
+                newFavCount++;
+            }
+        });
+        try {
+            localStorage.setItem('movieLibFavorites', JSON.stringify(currentFavs));
+        } catch(e) { /* ignore quota error */ }
+        totalImported += newFavCount;
+    }
+
+    // Import watch history
+    if (Array.isArray(watchHistory)) {
+        var currentHistory = (typeof window.getWatchHistory === 'function') ? window.getWatchHistory() : [];
+        var newHistoryCount = 0;
+        watchHistory.forEach(function(entry) {
+            if (entry && typeof entry === 'object' && typeof entry.title === 'string') {
+                // Avoid duplicates by title (and season/episode for TV)
+                var isDuplicate = currentHistory.some(function(h) {
+                    if (h.title !== entry.title) return false;
+                    if (entry.type === 'episode' && h.type === 'episode') {
+                        return h.season === entry.season && h.episode === entry.episode;
+                    }
+                    return h.type === entry.type;
+                });
+                if (!isDuplicate) {
+                    currentHistory.push(entry);
+                    newHistoryCount++;
+                }
+            }
+        });
+        // Limit to MAX_HISTORY (100)
+        if (currentHistory.length > 100) {
+            currentHistory = currentHistory.slice(0, 100);
+        }
+        try {
+            localStorage.setItem('movieLibWatchHistory', JSON.stringify(currentHistory));
+        } catch(e) { /* ignore quota error */ }
+        totalImported += newHistoryCount;
+    }
+
+    // Import playlist
+    if (Array.isArray(playlist)) {
+        var currentPlaylist = (typeof window.getPlaylist === 'function') ? window.getPlaylist() : [];
+        var newPlaylistCount = 0;
+        playlist.forEach(function(title) {
+            if (typeof title === 'string' && currentPlaylist.indexOf(title) === -1) {
+                currentPlaylist.push(title);
+                newPlaylistCount++;
+            }
+        });
+        try {
+            localStorage.setItem('movieLibPlaylist', JSON.stringify(currentPlaylist));
+        } catch(e) { /* ignore quota error */ }
+        totalImported += newPlaylistCount;
+    }
+
+    if (totalImported === 0) {
+        window.Utils.showToast('No new data to import (all items already exist)', 'warning');
+        return false;
+    }
+
+    return totalImported;
+}
+
+window.Export = { exportLibrary: window.exportLibrary, toggleExportDropdown: window.toggleExportDropdown, importLibrary: window.importLibrary };

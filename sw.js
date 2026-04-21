@@ -1,31 +1,31 @@
 // Media Library - Service Worker
 // Provides offline caching and PWA installability
 
-var CACHE_NAME = 'medialib-v2';
+var CACHE_NAME = 'medialib-v11';
 
 // Static assets to pre-cache on install
 var PRECACHE_URLS = [
-  '/bilko/index.html',
-  '/bilko/css/styles.css',
-  '/bilko/js/main.js',
-  '/bilko/js/modules/database.js',
-  '/bilko/js/modules/utils.js',
-  '/bilko/js/modules/debug.js',
-  '/bilko/js/modules/nfo-parser.js',
-  '/bilko/js/modules/scanner.js',
-  '/bilko/js/modules/ui-renderer.js',
-  '/bilko/js/modules/detail-page.js',
-  '/bilko/js/modules/video-player.js',
-  '/bilko/js/modules/theme.js',
-  '/bilko/js/modules/folder-ops.js',
-  '/bilko/js/modules/collections.js',
-  '/bilko/js/modules/favorites.js',
-  '/bilko/js/modules/watch-history.js',
-  '/bilko/js/modules/playlist.js',
-  '/bilko/js/modules/stats.js',
-  '/bilko/js/modules/export.js',
-  '/bilko/js/modules/playback-resume.js',
-  '/bilko/manifest.json'
+  '/bilkos-media-library/index.html',
+  '/bilkos-media-library/css/styles.css',
+  '/bilkos-media-library/js/main.js',
+  '/bilkos-media-library/js/modules/database.js',
+  '/bilkos-media-library/js/modules/utils.js',
+  '/bilkos-media-library/js/modules/debug.js',
+  '/bilkos-media-library/js/modules/nfo-parser.js',
+  '/bilkos-media-library/js/modules/scanner.js',
+  '/bilkos-media-library/js/modules/ui-renderer.js',
+  '/bilkos-media-library/js/modules/detail-page.js',
+  '/bilkos-media-library/js/modules/video-player.js',
+  '/bilkos-media-library/js/modules/theme.js',
+  '/bilkos-media-library/js/modules/folder-ops.js',
+  '/bilkos-media-library/js/modules/collections.js',
+  '/bilkos-media-library/js/modules/favorites.js',
+  '/bilkos-media-library/js/modules/watch-history.js',
+  '/bilkos-media-library/js/modules/playlist.js',
+  '/bilkos-media-library/js/modules/stats.js',
+  '/bilkos-media-library/js/modules/export.js',
+  '/bilkos-media-library/js/modules/playback-resume.js',
+  '/bilkos-media-library/manifest.json'
 ];
 
 // Install event: pre-cache known static assets
@@ -81,7 +81,7 @@ self.addEventListener('fetch', function(event) {
         return response;
       }).catch(function() {
         return caches.match(event.request).then(function(cachedResponse) {
-          return cachedResponse || caches.match('/bilko/index.html');
+          return cachedResponse || caches.match('/bilkos-media-library/index.html');
         });
       })
     );

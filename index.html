@@ -6,9 +6,10 @@
 <meta name="theme-color" content="#e50914">
 <!-- manifest removed: causes CORS errors on file:// protocol -->
 <title>Media Library</title>
-<link rel="stylesheet" href="css/styles.css?v=3">
+<link rel="stylesheet" href="css/styles.css?v=11">
 </head>
 <body>
+<a class="skip-to-content" href="#mainContent">Skip to Content</a>
 <div class="app-wrapper">
 <div class="scroll-progress-bar" id="scrollProgressBar"><div class="scroll-progress-fill" id="scrollProgressFill"></div></div>
 
@@ -75,6 +76,8 @@
       <div class="recent-folders-list" id="recentFoldersList"></div>
     </div>
     <div class="welcome-stats" id="welcomeStats"></div>
+    <div class="quick-stats-widget" id="quickStatsWidget"></div>
+    <div class="recently-played-widget" id="recentlyPlayedWidget" style="display:none"></div>
     <div class="welcome-shortcuts-hint">
       <span class="kbd-hint" onclick="showKeyboardHelp()">
         <kbd>?</kbd> Keyboard Shortcuts
@@ -108,6 +111,75 @@
         <svg class="app-logo" viewBox="0 0 40 40" fill="none"><rect x="2" y="2" width="36" height="36" rx="8" fill="var(--accent)" opacity=".2"/><polygon points="16,10 16,30 32,20" fill="var(--accent)"/></svg>
         <div><div class="header-title">Media Library</div><div class="header-stats" id="headerStats">Loading...</div></div>
       </div>
+      <!-- Hamburger Menu Button (mobile only) -->
+      <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleMobileMenu()" aria-label="Toggle menu" aria-expanded="false">
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+      </button>
+
+      <!-- Mobile Slide-Out Menu Panel -->
+      <div class="mobile-menu-overlay" id="mobileMenuOverlay" onclick="toggleMobileMenu()"></div>
+      <div class="mobile-menu-panel" id="mobileMenuPanel">
+        <div class="mobile-menu-header">
+          <span class="mobile-menu-title">Menu</span>
+          <button class="mobile-menu-close" onclick="toggleMobileMenu()" aria-label="Close menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="mobile-menu-body">
+          <div class="mobile-menu-section">
+            <span class="mobile-menu-section-title">Theme</span>
+            <div class="mobile-theme-options">
+              <button class="mobile-theme-btn active" data-theme="dark" onclick="setTheme('dark');toggleMobileMenu()">
+                <span class="theme-dot" style="background:#e50914"></span>Dark
+              </button>
+              <button class="mobile-theme-btn" data-theme="light" onclick="setTheme('light');toggleMobileMenu()">
+                <span class="theme-dot" style="background:#c20008;border-color:#d2d2d7"></span>Light
+              </button>
+              <button class="mobile-theme-btn" data-theme="oled" onclick="setTheme('oled');toggleMobileMenu()">
+                <span class="theme-dot" style="background:#e50914;border-color:#222"></span>OLED
+              </button>
+            </div>
+          </div>
+          <div class="mobile-menu-section">
+            <span class="mobile-menu-section-title">Accent Color</span>
+            <div class="mobile-accent-picker">
+              <span class="accent-color-swatch active" data-color="#e50914" style="background:#e50914" onclick="setAccentColor('#e50914')" title="Red"></span>
+              <span class="accent-color-swatch" data-color="#2563eb" style="background:#2563eb" onclick="setAccentColor('#2563eb')" title="Blue"></span>
+              <span class="accent-color-swatch" data-color="#7c3aed" style="background:#7c3aed" onclick="setAccentColor('#7c3aed')" title="Purple"></span>
+              <span class="accent-color-swatch" data-color="#0d9488" style="background:#0d9488" onclick="setAccentColor('#0d9488')" title="Teal"></span>
+              <span class="accent-color-swatch" data-color="#ea580c" style="background:#ea580c" onclick="setAccentColor('#ea580c')" title="Orange"></span>
+              <span class="accent-color-swatch" data-color="#db2777" style="background:#db2777" onclick="setAccentColor('#db2777')" title="Pink"></span>
+              <span class="accent-color-swatch" data-color="#16a34a" style="background:#16a34a" onclick="setAccentColor('#16a34a')" title="Green"></span>
+              <span class="accent-color-swatch" data-color="#d97706" style="background:#d97706" onclick="setAccentColor('#d97706')" title="Amber"></span>
+            </div>
+          </div>
+          <div class="mobile-menu-divider"></div>
+          <button class="mobile-menu-action" onclick="openManageFolders();toggleMobileMenu()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Manage Folders
+          </button>
+          <button class="mobile-menu-action" onclick="addFolder();toggleMobileMenu()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Folder
+          </button>
+          <button class="mobile-menu-action" onclick="importLibrary();toggleMobileMenu()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Import
+          </button>
+          <button class="mobile-menu-action" onclick="toggleExportDropdown();toggleMobileMenu()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export
+          </button>
+          <div class="mobile-menu-divider"></div>
+          <button class="mobile-menu-action mobile-menu-action--danger" onclick="selectFolder();toggleMobileMenu()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Reset Library
+          </button>
+        </div>
+      </div>
+
       <div class="header-controls">
         <div class="nav-tabs-wrapper">
           <div class="nav-tabs" id="navTabs">
@@ -148,11 +220,12 @@
         </div>
         <div class="search-box" id="searchBox">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input type="text" placeholder="Filter items... (Ctrl+K)" id="searchInput">
+          <input type="text" placeholder="Search titles, actors, directors... (Ctrl+K)" id="searchInput">
           <button class="search-clear-btn" id="searchClearBtn" onclick="clearSearchFilter()" title="Clear filter">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
           <kbd class="search-kbd" id="searchKbd">Ctrl+K</kbd>
+          <div class="search-suggestions" id="searchSuggestions"></div>
         </div>
         <div class="page-size-selector" id="pageSizeSelector">
           <label>Per page:</label>
@@ -167,11 +240,12 @@
         <div class="view-toggle" id="viewToggle">
           <button class="view-btn active" data-view="grid" onclick="setView('grid')" title="Grid View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>
           <button class="view-btn" data-view="detail" onclick="setView('detail')" title="Detail View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button>
-          <button class="view-btn" data-view="list" onclick="setView('list')" title="List View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
           <button class="view-btn" data-view="compact" onclick="setView('compact')" title="Compact View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="4" height="4"/><rect x="10" y="3" width="4" height="4"/><rect x="17" y="3" width="4" height="4"/><rect x="3" y="10" width="4" height="4"/><rect x="10" y="10" width="4" height="4"/><rect x="17" y="10" width="4" height="4"/><rect x="3" y="17" width="4" height="4"/><rect x="10" y="17" width="4" height="4"/><rect x="17" y="17" width="4" height="4"/></svg></button>
           <button class="view-btn" data-view="posters" onclick="setView('posters')" title="Poster Wall"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="1" width="5" height="7" rx="1"/><rect x="9" y="1" width="5" height="7" rx="1"/><rect x="17" y="1" width="5" height="7" rx="1"/><rect x="1" y="10" width="5" height="7" rx="1"/><rect x="9" y="10" width="5" height="7" rx="1"/><rect x="17" y="10" width="5" height="7" rx="1"/></svg></button>
-          <button class="view-btn" data-view="table" onclick="setView('table')" title="Table View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/><line x1="3" y1="3" x2="3" y2="21"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="21" y1="3" x2="21" y2="21"/><line x1="3" y1="3" x2="21" y2="3"/><line x1="3" y1="21" x2="21" y2="21"/></svg></button>
+          <button class="view-btn" data-view="table" onclick="setView('table')" title="Table View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/><line x1="3" y1="3" x2="3" y2="21"/><line x1="21" y1="3" x2="21" y2="21"/></svg></button>
+
         </div>
+        <button class="theme-btn" id="fullscreenToggleBtn" title="Fullscreen (F11)"><svg class="fs-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
         <div class="theme-selector">
           <button class="theme-btn" onclick="toggleThemeDropdown()" title="Toggle Theme">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
@@ -179,10 +253,26 @@
           <div class="theme-dropdown" id="themeDropdown">
             <button class="theme-option active" data-theme="dark" onclick="setTheme('dark')"><span class="theme-dot" style="background:#e50914"></span>Dark Mode</button>
             <button class="theme-option" data-theme="light" onclick="setTheme('light')"><span class="theme-dot" style="background:#c20008;border-color:#d2d2d7"></span>Light Mode</button>
+            <button class="theme-option" data-theme="oled" onclick="setTheme('oled')"><span class="theme-dot" style="background:#e50914;border-color:#222"></span>OLED Black</button>
+            <div class="accent-color-picker" id="accentColorPicker">
+              <span class="accent-color-swatch active" data-color="#e50914" style="background:#e50914" onclick="setAccentColor('#e50914')" title="Red"></span>
+              <span class="accent-color-swatch" data-color="#2563eb" style="background:#2563eb" onclick="setAccentColor('#2563eb')" title="Blue"></span>
+              <span class="accent-color-swatch" data-color="#7c3aed" style="background:#7c3aed" onclick="setAccentColor('#7c3aed')" title="Purple"></span>
+              <span class="accent-color-swatch" data-color="#0d9488" style="background:#0d9488" onclick="setAccentColor('#0d9488')" title="Teal"></span>
+              <span class="accent-color-swatch" data-color="#ea580c" style="background:#ea580c" onclick="setAccentColor('#ea580c')" title="Orange"></span>
+              <span class="accent-color-swatch" data-color="#db2777" style="background:#db2777" onclick="setAccentColor('#db2777')" title="Pink"></span>
+              <span class="accent-color-swatch" data-color="#16a34a" style="background:#16a34a" onclick="setAccentColor('#16a34a')" title="Green"></span>
+              <span class="accent-color-swatch" data-color="#d97706" style="background:#d97706" onclick="setAccentColor('#d97706')" title="Amber"></span>
+            </div>
           </div>
         </div>
         <button class="btn-header" onclick="openManageFolders()" title="Manage Folders"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
         <button class="btn-header" onclick="addFolder()" title="Add Folder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Folder</button>
+        <button class="btn-header" id="randomPickBtn" onclick="pickRandomMovie()" title="Surprise Me!"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><circle cx="8" cy="10" r="1.5" fill="currentColor"/><circle cx="16" cy="10" r="1.5" fill="currentColor"/><path d="M9 15c.8 1 2 1.5 3 1.5s2.2-.5 3-1.5"/></svg>Surprise Me</button>
+        <button class="btn-header" onclick="importLibrary()" title="Import Library">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Import
+          </button>
         <div class="export-wrapper" id="exportWrapper">
           <button class="btn-header" onclick="toggleExportDropdown()" title="Export Library">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -209,7 +299,7 @@
       </div>
     </div>
   </header>
-  <main class="main-content">
+  <main class="main-content" id="mainContent">
     <!-- Shared Filter Bar - visible on all content tabs -->
     <div class="shared-filter-bar" id="sharedFilterBar">
       <div class="filter-bar">
@@ -220,7 +310,12 @@
           <option value="year-desc">Year Descending</option>
           <option value="rating-desc">Rating High-Low</option>
           <option value="size-desc">Size Large-Small</option>
+          <option value="date-desc">Recently Added</option>
         </select>
+        <button class="select-mode-toggle" id="selectModeToggle" onclick="toggleSelectMode()" title="Toggle Select Mode">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="9 11 12 14 22 4"/></svg>
+          Select
+        </button>
 
         <button class="filter-panel-toggle" id="filterPanelToggle" onclick="toggleAdvancedFilters()" title="Advanced Filters">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
@@ -232,6 +327,11 @@
           <span id="skippedCount">0</span> skipped
         </span>
         <span class="filter-count" id="sharedFilterCount"></span>
+        <button class="watched-filter-btn" id="watchedFilterBtn" onclick="toggleWatchedFilter()">All</button>
+        <button class="btn-header" onclick="toggleJumpToLetter()" title="Jump to Letter" style="font-size:.8rem;padding:.4rem .6rem">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          A-Z
+        </button>
       </div>
       <!-- Skipped panel (toggled by skipped badge) -->
       <div id="skippedPanel" class="skipped-panel"><h4>Skipped Folders</h4><ul class="skipped-list" id="skippedList"></ul></div>
@@ -316,6 +416,16 @@
           </div>
         </div>
       </div>
+    </div>
+    <div class="decade-filter-pills" id="decadeFilterPills"></div>
+    <!-- Card Size Slider -->
+    <div class="card-size-slider" id="cardSizeSlider">
+      <label class="card-size-label">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Card Size
+      </label>
+      <input type="range" class="card-size-range" id="cardSizeRange" min="150" max="280" step="10" value="200" oninput="updateCardSize(this.value)">
+      <span class="card-size-value" id="cardSizeValue">200px</span>
     </div>
     <!-- All Tab -->
     <div id="allTab" class="tab-content active">
@@ -490,51 +600,49 @@
   </div>
 </div>
 
-<!-- Keyboard Shortcuts Modal -->
-<div class="modal-overlay hidden" id="keyboardHelpModal">
+<!-- Keyboard Shortcuts Panel -->
+<div class="modal-overlay hidden keyboard-shortcuts-panel" id="keyboardHelpModal">
   <div class="modal-container keyboard-help-container">
     <div class="modal-header">
-      <h2 class="modal-title">Keyboard Shortcuts</h2>
+      <h2 class="modal-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="6" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="18" y2="12"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
+        Keyboard Shortcuts
+      </h2>
       <button class="modal-close" onclick="closeKeyboardHelp()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="modal-body">
       <div class="shortcut-grid">
         <div class="shortcut-section">
-          <h3>Tabs</h3>
-          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>1</kbd><span>All</span></div>
-          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>2</kbd><span>Movies</span></div>
-          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>3</kbd><span>TV Shows</span></div>
-          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>4</kbd><span>Animation</span></div>
-          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>5</kbd><span>Anime</span></div>
-          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>6</kbd><span>Collections</span></div>
-          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>7</kbd><span>Favorites</span></div>
-          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>8</kbd><span>History</span></div>
-          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>9</kbd><span>Playlist</span></div>
-          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>0</kbd><span>Stats</span></div>
-        </div>
-        <div class="shortcut-section">
           <h3>Navigation</h3>
-          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>K</kbd><span>Focus search</span></div>
+          <div class="shortcut-row"><kbd>&larr;</kbd><kbd>&rarr;</kbd><span>Switch tabs</span></div>
+          <div class="shortcut-row"><kbd>Esc</kbd><span>Close panel / modal</span></div>
           <div class="shortcut-row"><kbd>Arrow Keys</kbd><span>Navigate between cards</span></div>
           <div class="shortcut-row"><kbd>Enter</kbd><span>Open focused card</span></div>
-          <div class="shortcut-row"><kbd>Esc</kbd><span>Close detail/player</span></div>
+          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>1-9</kbd><span>Jump to tab</span></div>
+          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>K</kbd><span>Focus search</span></div>
         </div>
         <div class="shortcut-section">
-          <h3>Player</h3>
-          <div class="shortcut-row"><kbd>&larr;</kbd><span>Previous</span></div>
-          <div class="shortcut-row"><kbd>&rarr;</kbd><span>Next</span></div>
-          <div class="shortcut-row"><kbd>Space</kbd><span>Play/Pause</span></div>
+          <h3>Playback</h3>
+          <div class="shortcut-row"><kbd>Space</kbd><span>Play / Pause</span></div>
+          <div class="shortcut-row"><kbd>M</kbd><span>Toggle mute</span></div>
+          <div class="shortcut-row"><kbd>F</kbd><span>Toggle fullscreen</span></div>
+          <div class="shortcut-row"><kbd>&larr;</kbd><kbd>&rarr;</kbd><span>Previous / Next</span></div>
+          <div class="shortcut-row"><kbd>Shift</kbd>+<kbd>&larr;&rarr;</kbd><span>Seek ±30s</span></div>
           <div class="shortcut-row"><kbd>C</kbd><span>Cycle subtitles</span></div>
           <div class="shortcut-row"><kbd>A</kbd><span>Cycle audio tracks</span></div>
-          <div class="shortcut-row"><kbd>F</kbd><span>Toggle fullscreen</span></div>
-          <div class="shortcut-row"><kbd>M</kbd><span>Toggle mute</span></div>
-          <div class="shortcut-row"><kbd>Shift</kbd>+<kbd>&larr;&rarr;</kbd><span>Seek ±30s</span></div>
           <div class="shortcut-row"><kbd>Shift</kbd>+<kbd>&uarr;&darr;</kbd><span>Subtitle delay ±0.5s</span></div>
         </div>
         <div class="shortcut-section">
+          <h3>Search</h3>
+          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>F</kbd><span>Focus search box</span></div>
+          <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>K</kbd><span>Quick search</span></div>
+        </div>
+        <div class="shortcut-section">
           <h3>General</h3>
-          <div class="shortcut-row"><kbd>?</kbd><span>Show this help</span></div>
+          <div class="shortcut-row"><kbd>R</kbd><span>Random movie pick</span></div>
+          <div class="shortcut-row"><kbd>?</kbd> / <kbd>Ctrl</kbd>+<kbd>/</kbd><span>Show this help</span></div>
           <div class="shortcut-row"><kbd>Dbl-click</kbd><span>Play media</span></div>
+          <div class="shortcut-row"><kbd>Esc</kbd><span>Close any overlay</span></div>
         </div>
       </div>
     </div>
@@ -569,38 +677,133 @@
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
     Show Detail
   </button>
+  <button class="context-menu-item" data-action="technicalinfo">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+    Show Technical Info
+  </button>
+  <button class="context-menu-item" data-action="copytitle">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    Copy Title
+  </button>
+  <button class="context-menu-item" data-action="opendetail">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+    Open Detail Page
+  </button>
+  <div class="context-menu-divider"></div>
+  <button class="context-menu-item" data-action="share">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+    Share Movie Info
+  </button>
+  <div class="context-menu-divider"></div>
+  <button class="context-menu-item" data-action="note">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+    <span id="ctxNoteLabel">Add Note</span>
+  </button>
 </div>
+
+<!-- Batch Action Bar is created dynamically by toggleSelectMode() -->
 
 <!-- Toast Container -->
 <div class="toast-container" id="toastContainer"></div>
+<div aria-live="polite" aria-atomic="true" class="sr-only" id="ariaLiveRegion"></div>
+
+<!-- Floating Action Button (mobile only) -->
+<div class="fab-container" id="fabContainer">
+  <div class="fab-menu" id="fabMenu">
+    <button class="fab-item" onclick="pickRandomMovie();toggleFabMenu()" title="Surprise Me">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><circle cx="8" cy="10" r="1.5" fill="currentColor"/><circle cx="16" cy="10" r="1.5" fill="currentColor"/><path d="M9 15c.8 1 2 1.5 3 1.5s2.2-.5 3-1.5"/></svg>
+      <span>Random</span>
+    </button>
+    <button class="fab-item" onclick="addFolder();toggleFabMenu()" title="Add Folder">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span>Add</span>
+    </button>
+    <button class="fab-item" onclick="document.getElementById('searchInput').focus();toggleFabMenu()" title="Search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <span>Search</span>
+    </button>
+  </div>
+  <button class="fab-main" id="fabMain" onclick="toggleFabMenu()" aria-label="Quick Actions">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+</div>
 
 <!-- Modular JavaScript Files -->
 <script>var _appVer = Date.now();</script>
-<script src="js/modules/database.js?v=3"></script>
-<script src="js/modules/utils.js?v=3"></script>
-<script src="js/modules/debug.js?v=3"></script>
-<script src="js/modules/nfo-parser.js?v=3"></script>
-<script src="js/modules/scanner.js?v=3"></script>
-<script src="js/modules/ui-renderer.js?v=3"></script>
-<script src="js/modules/detail-page.js?v=3"></script>
-<script src="js/modules/video-player.js?v=3"></script>
-<script src="js/modules/theme.js?v=3"></script>
-<script src="js/modules/folder-ops.js?v=3"></script>
-<script src="js/modules/collections.js?v=3"></script>
-<script src="js/modules/favorites.js?v=3"></script>
-<script src="js/modules/watch-history.js?v=3"></script>
-<script src="js/modules/playlist.js?v=3"></script>
-<script src="js/modules/stats.js?v=3"></script>
-<script src="js/modules/export.js?v=3"></script>
-<script src="js/modules/duplicate-finder.js?v=3"></script>
-<script src="js/modules/playback-resume.js?v=3"></script>
-<script src="js/main.js?v=3"></script>
+<script src="js/modules/database.js?v=4"></script>
+<script src="js/modules/utils.js?v=4"></script>
+<script src="js/modules/debug.js?v=4"></script>
+<script src="js/modules/nfo-parser.js?v=4"></script>
+<script src="js/modules/scanner.js?v=4"></script>
+<script src="js/modules/ui-renderer.js?v=8"></script>
+<script src="js/modules/detail-page.js?v=4"></script>
+<script src="js/modules/video-player.js?v=4"></script>
+<script src="js/modules/theme.js?v=4"></script>
+<script src="js/modules/folder-ops.js?v=4"></script>
+<script src="js/modules/collections.js?v=4"></script>
+<script src="js/modules/favorites.js?v=4"></script>
+<script src="js/modules/watch-history.js?v=4"></script>
+<script src="js/modules/playlist.js?v=4"></script>
+<script src="js/modules/stats.js?v=4"></script>
+<script src="js/modules/export.js?v=4"></script>
+<script src="js/modules/duplicate-finder.js?v=4"></script>
+<script src="js/modules/playback-resume.js?v=4"></script>
+<script src="js/modules/user-ratings.js?v=4"></script>
+<script src="js/modules/movie-notes.js?v=4"></script>
+<script src="js/main.js?v=8"></script>
+
+<!-- Mobile Menu Toggle -->
+<script>
+window.toggleMobileMenu = function() {
+  var panel = document.getElementById('mobileMenuPanel');
+  var overlay = document.getElementById('mobileMenuOverlay');
+  var btn = document.getElementById('hamburgerBtn');
+  var isOpen = panel.classList.contains('open');
+  if (isOpen) {
+    panel.classList.remove('open');
+    overlay.classList.remove('open');
+    btn.classList.remove('active');
+    btn.setAttribute('aria-expanded', 'false');
+    document.body.style.overflow = '';
+  } else {
+    panel.classList.add('open');
+    overlay.classList.add('open');
+    btn.classList.add('active');
+    btn.setAttribute('aria-expanded', 'true');
+    document.body.style.overflow = 'hidden';
+  }
+};
+// Update mobile theme button active state when theme changes
+(function() {
+  var origSetTheme = window.setTheme;
+  if (typeof origSetTheme === 'function') {
+    window.setTheme = function(t) {
+      origSetTheme(t);
+      document.querySelectorAll('.mobile-theme-btn').forEach(function(b) {
+        b.classList.toggle('active', b.getAttribute('data-theme') === t);
+      });
+    };
+  }
+})();
+// Update accent swatch active state in mobile menu
+(function() {
+  var origSetAccent = window.setAccentColor;
+  if (typeof origSetAccent === 'function') {
+    window.setAccentColor = function(c) {
+      origSetAccent(c);
+      document.querySelectorAll('.mobile-accent-picker .accent-color-swatch').forEach(function(s) {
+        s.classList.toggle('active', s.getAttribute('data-color') === c);
+      });
+    };
+  }
+})();
+</script>
 
 <!-- Service Worker Registration -->
 <script>
 if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('/bilko/sw.js').then(function(reg) {
+    navigator.serviceWorker.register('/bilkos-media-library/sw.js').then(function(reg) {
       console.log('[PWA] Service Worker registered, scope:', reg.scope);
     }).catch(function(err) {
       console.warn('[PWA] Service Worker registration failed:', err);

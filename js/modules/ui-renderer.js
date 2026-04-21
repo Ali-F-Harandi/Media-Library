@@ -1,17 +1,208 @@
 /**
  * Movie Library - UI Renderer Module
- * Handles rendering movies in different view modes (grid, detail, list)
+ * Handles rendering movies in different view modes (grid, detail, compact, posters)
  * Manages poster/logo loading and display state
  * Includes All, Animation, and Anime tab rendering
  */
 
 var currentView = localStorage.getItem('movieLibView') || 'grid';
+// Fallback: if saved view is 'list', reset to 'grid' (removed mode)
+if (currentView === 'list') { currentView = 'grid'; localStorage.setItem('movieLibView', 'grid'); }
+// Also sanitize per-tab view preferences for removed mode
+(function _sanitizeTabViews() {
+    var tabs = ['all','movies','tvshows','animation','anime','favorites','history','playlist','stats','duplicates','collections'];
+    tabs.forEach(function(t) {
+        var key = 'movieLibViewTab_' + t;
+        var v = localStorage.getItem(key);
+        if (v === 'list') { localStorage.setItem(key, 'grid'); }
+    });
+})();
 
-// Display mode constants: grid, detail (extended info), list, compact, posters, table
+/**
+ * Get the current view mode (exposed for other modules)
+ */
+window.getViewMode = function() { return currentView; };
+
+// Track logo blob URLs that couldn't be converted to data URLs,
+// so they can be revoked on navigation / re-render to prevent memory leaks.
+var _logoBlobUrls = [];
+
+// Table sort state for table view column sorting
+var _tableSortColumn = null; // e.g. 'title', 'year', 'rating', 'genres', 'size', 'quality'
+var _tableSortDirection = 'asc'; // 'asc' or 'desc'
+
+/**
+ * Sort table view by a specific column
+ * Toggles direction if same column is clicked, defaults to asc for new column
+ */
+window.sortTableColumn = function(column) {
+    if (_tableSortColumn === column) {
+        _tableSortDirection = (_tableSortDirection === 'asc') ? 'desc' : 'asc';
+    } else {
+        _tableSortColumn = column;
+        _tableSortDirection = 'asc';
+    }
+    // Re-render the active tab to apply sort
+    var activeTab = _getActiveTabName();
+    if (activeTab === 'movies') filterMovies();
+    else if (activeTab === 'all') renderAllTab();
+    else if (activeTab === 'tvshows') renderTVShows();
+    else if (activeTab === 'animation') renderAnimationTab();
+    else if (activeTab === 'anime') renderAnimeTab();
+    else if (activeTab === 'favorites' && typeof window.renderFavoritesTab === 'function') window.renderFavoritesTab();
+    else if (activeTab === 'history' && typeof window.renderHistoryTab === 'function') window.renderHistoryTab();
+    else if (activeTab === 'playlist' && typeof window.renderPlaylistTab === 'function') window.renderPlaylistTab();
+};
+
+/**
+ * Get the sort indicator character for a column header
+ */
+function _getTableSortIndicator(column) {
+    if (_tableSortColumn !== column) return '';
+    return _tableSortDirection === 'asc' ? ' \u25B2' : ' \u25BC';
+}
+
+/**
+ * Get the CSS class for active sort header
+ */
+function _getTableSortClass(column) {
+    return _tableSortColumn === column ? ' active' : '';
+}
+
+/**
+ * Apply table-specific sorting to an items array
+ * This is called within buildCardItems when currentView === 'table'
+ */
+function _applyTableSort(items) {
+    if (!_tableSortColumn) return items;
+    var col = _tableSortColumn;
+    var dir = _tableSortDirection;
+    items.sort(function(a, b) {
+        var va, vb;
+        if (col === 'title') {
+            va = a.title.toLowerCase();
+            vb = b.title.toLowerCase();
+            return dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+        } else if (col === 'year') {
+            va = parseInt(a.year) || 0;
+            vb = parseInt(b.year) || 0;
+            return dir === 'asc' ? va - vb : vb - va;
+        } else if (col === 'rating') {
+            va = (a.nfoData && a.nfoData.rating) || 0;
+            vb = (b.nfoData && b.nfoData.rating) || 0;
+            return dir === 'asc' ? va - vb : vb - va;
+        } else if (col === 'genres') {
+            va = (a.nfoData && a.nfoData.genres) ? a.nfoData.genres.join(',').toLowerCase() : '';
+            vb = (b.nfoData && b.nfoData.genres) ? b.nfoData.genres.join(',').toLowerCase() : '';
+            return dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+        } else if (col === 'size') {
+            va = a.fileSize || 0;
+            vb = b.fileSize || 0;
+            return dir === 'asc' ? va - vb : vb - va;
+        } else if (col === 'quality') {
+            va = (a.quality || '').toLowerCase();
+            vb = (b.quality || '').toLowerCase();
+            return dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+        }
+        return 0;
+    });
+    return items;
+}
+
+// ============================================================================
+// DRAG-TO-SELECT IN TABLE VIEW
+// Mousedown/mousemove/mouseup handlers for selecting multiple table rows
+// ============================================================================
+var _tableDragSelectActive = false;
+var _tableDragStartRow = null;
+var _tableDragLastRow = null;
+
+/**
+ * Initialize drag-to-select event listeners on the document
+ * Delegates to movie-table-row elements
+ */
+(function initTableDragSelect() {
+    document.addEventListener('mousedown', function(e) {
+        var row = e.target.closest('.movie-table-row');
+        if (!row) return;
+        // Only in select mode
+        if (!window._selectMode) return;
+        // Don't interfere with checkbox clicks
+        if (e.target.closest('.card-checkbox')) return;
+        e.preventDefault();
+        _tableDragSelectActive = true;
+        _tableDragStartRow = row;
+        _tableDragLastRow = row;
+        _toggleRowSelection(row);
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!_tableDragSelectActive) return;
+        var row = e.target.closest('.movie-table-row');
+        if (!row || row === _tableDragLastRow) return;
+        _tableDragLastRow = row;
+        _toggleRowSelection(row);
+        row.classList.add('drag-selecting');
+    });
+
+    document.addEventListener('mouseup', function(e) {
+        if (!_tableDragSelectActive) return;
+        _tableDragSelectActive = false;
+        // Clean up drag-selecting class
+        document.querySelectorAll('.movie-table-row.drag-selecting').forEach(function(r) {
+            r.classList.remove('drag-selecting');
+        });
+        _tableDragStartRow = null;
+        _tableDragLastRow = null;
+    });
+})();
+
+/**
+ * Toggle selection on a table row
+ */
+function _toggleRowSelection(row) {
+    var title = row.dataset.title;
+    if (!title) return;
+    if (typeof window.toggleItemSelection === 'function') {
+        window.toggleItemSelection(title);
+    }
+}
+
+/**
+ * Revoke all tracked logo blob URLs and clear their references on movie objects.
+ * Should be called before a tab re-render to free memory from previous logo images.
+ */
+function _revokeLogoBlobUrls() {
+    for (var i = 0; i < _logoBlobUrls.length; i++) {
+        URL.revokeObjectURL(_logoBlobUrls[i]);
+    }
+    _logoBlobUrls = [];
+    // Also clean up any blob: logo URLs that remain on movie objects
+    (window.allMovies || []).forEach(function(m) {
+        if (m.logoUrl && m.logoUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(m.logoUrl);
+            m.logoUrl = null;
+        }
+    });
+}
+
+// ============================================================================
+// WATCH PROGRESS HELPER - Generates progress bar HTML for a movie title
+// Returns empty string if no progress or progress is <1% or >=95%
+// ============================================================================
+function getWatchProgressHtml(title) {
+    if (!title || typeof window.getPlaybackPosition !== 'function') return '';
+    var pos = window.getPlaybackPosition(title);
+    if (!pos || !pos.position || !pos.duration || pos.position < 5) return '';
+    var pct = Math.min(100, Math.round((pos.position / pos.duration) * 100));
+    if (pct <= 0 || pct >= 95) return '';
+    return '<div class="watch-progress-bar" title="Watched ' + pct + '%"><div class="watch-progress-fill" style="width:' + pct + '%"></div></div>';
+}
+
+// Display mode constants: grid, detail (extended info), compact, posters
 var VIEW_MODES = {
     GRID: 'grid',
     DETAIL: 'detail',
-    LIST: 'list',
     COMPACT: 'compact',
     POSTERS: 'posters',
     TABLE: 'table'
@@ -68,8 +259,9 @@ async function _loadSingleImage(img) {
         if (!m.logoUrl) {
             try {
                 var lf = await m.logoHandle.getFile();
-                m.logoUrl = URL.createObjectURL(lf);
-                // Cache logo to thumbnail cache
+                var _logoBlobUrl = URL.createObjectURL(lf);
+                m.logoUrl = _logoBlobUrl;
+                // Cache logo to thumbnail cache as data URL
                 if (window.saveThumbnail && m.fullPath) {
                     try {
                         var logoCachePath = m.fullPath + '/' + m.logoHandle.name;
@@ -80,7 +272,16 @@ async function _loadSingleImage(img) {
                             reader.readAsDataURL(lf);
                         });
                         await window.saveThumbnail(logoCachePath, logoDataUrl);
-                    } catch(e2) {}
+                        // Replace blob URL with data URL and revoke blob to free memory
+                        URL.revokeObjectURL(_logoBlobUrl);
+                        m.logoUrl = logoDataUrl;
+                    } catch(e2) {
+                        // Caching failed — track blob URL for later cleanup
+                        _logoBlobUrls.push(_logoBlobUrl);
+                    }
+                } else {
+                    // No cache available — track blob URL for later cleanup
+                    _logoBlobUrls.push(_logoBlobUrl);
                 }
             } catch(e) { return; }
         }
@@ -218,6 +419,11 @@ function sortItems(items, sortBy) {
             return rb - ra;
         }
         if (sortBy === 'size-desc') return b.fileSize - a.fileSize;
+        if (sortBy === 'date-desc') {
+            var da = a.scanDate || 0;
+            var db2 = b.scanDate || 0;
+            return db2 - da;
+        }
         return 0;
     });
     updateSortIndicators();
@@ -259,8 +465,40 @@ function matchesSearch(m, q) {
     if (m.nfoData && m.nfoData.tags && m.nfoData.tags.some(function(t) {
         return t.toLowerCase().includes(q);
     })) return true;
+    // Search by actor/cast (nfoData.actors — array of {name, role, thumb})
+    if (m.nfoData && m.nfoData.actors && m.nfoData.actors.some(function(a) {
+        return (a.name && a.name.toLowerCase().includes(q)) || (a.role && a.role.toLowerCase().includes(q));
+    })) return true;
+    // Search by cast (nfoData.cast — array of actor name strings, alternate field name)
+    if (m.nfoData && m.nfoData.cast && m.nfoData.cast.some(function(c) {
+        var name = (typeof c === 'string') ? c : (c && c.name);
+        return name && name.toLowerCase().includes(q);
+    })) return true;
+    // Search by director (nfoData.directors — array of strings)
+    if (m.nfoData && m.nfoData.directors && m.nfoData.directors.some(function(d) {
+        return d.toLowerCase().includes(q);
+    })) return true;
+    // Search by director (nfoData.director — singular string, alternate field name)
+    if (m.nfoData && m.nfoData.director && typeof m.nfoData.director === 'string' && m.nfoData.director.toLowerCase().includes(q)) return true;
+    // Search by writer (nfoData.writers — array of strings)
+    if (m.nfoData && m.nfoData.writers && m.nfoData.writers.some(function(w) {
+        return w.toLowerCase().includes(q);
+    })) return true;
+    // Search by writer (nfoData.writer — singular string or array, alternate field name)
+    if (m.nfoData && m.nfoData.writer) {
+        if (typeof m.nfoData.writer === 'string' && m.nfoData.writer.toLowerCase().includes(q)) return true;
+        if (Array.isArray(m.nfoData.writer) && m.nfoData.writer.some(function(w) {
+            return typeof w === 'string' && w.toLowerCase().includes(q);
+        })) return true;
+    }
+    // Search by studio
+    if (m.nfoData && m.nfoData.studio && m.nfoData.studio.toLowerCase().includes(q)) return true;
     return false;
 }
+
+// Expose matchesSearch globally so all modules (playlist, favorites, watch-history, etc.)
+// can search by title, cast, director, writer, etc.
+window.matchesSearch = matchesSearch;
 
 // ============================================================================
 // GENRE FILTER HELPER: Check if movie matches a selected genre
@@ -449,9 +687,11 @@ function renderShelfRow(title, movies, shelfId) {
         var realIdx = window.allMovies.indexOf(m);
         var hasPoster = !!m.posterHandle;
         var r = m.nfoData && m.nfoData.rating;
+        var newBadge = (m.scanDate && (Date.now() - m.scanDate < 7 * 24 * 60 * 60 * 1000)) ? '<span class="new-badge">NEW</span>' : '';
         
         html += '<div class="shelf-card" onclick="showItemFromTab(' + realIdx + ',\'all\')" ondblclick="playItemDirectly(' + realIdx + ')" title="' + window.Utils.escHtml(m.title) + '">' +
             '<div class="shelf-poster">' +
+                newBadge +
                 '<img class="poster-img" data-shelf="' + shelfId + '" data-shelf-idx="' + realIdx + '">' +
                 '<div class="no-poster-placeholder"' + (hasPoster ? ' style="display:none"' : '') + '>' +
                     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
@@ -464,6 +704,7 @@ function renderShelfRow(title, movies, shelfId) {
                     '<svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" color="#fff"><polygon points="5,3 19,12 5,21"/></svg>' +
                 '</div>' +
                 (r ? '<span class="shelf-rating">\u2605 ' + r.toFixed(1) + '</span>' : '') +
+                getWatchProgressHtml(m.title) +
             '</div>' +
             '<div class="shelf-info">' +
                 '<div class="shelf-card-title">' + window.Utils.escHtml(m.title) + '</div>' +
@@ -516,6 +757,7 @@ function renderTopRatedShelf() {
                     '<svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" color="#fff"><polygon points="5,3 19,12 5,21"/></svg>' +
                 '</div>' +
                 '<span class="shelf-rating">\u2605 ' + m.nfoData.rating.toFixed(1) + '</span>' +
+                getWatchProgressHtml(m.title) +
             '</div>' +
             '<div class="shelf-info">' +
                 '<div class="shelf-card-title">' + window.Utils.escHtml(m.title) + '</div>' +
@@ -551,7 +793,88 @@ async function loadShelfPosters(container) {
     }
 }
 
+// ============================================================================
+// CONTINUE WATCHING SHELF (Enhanced) - Shows partially watched items with progress
+// ============================================================================
+function renderContinueWatchingShelf() {
+    if (typeof window.getPlaybackPosition !== 'function') return '';
+    var positions = window.getPlaybackPositions();
+    var keys = Object.keys(positions);
+    if (keys.length === 0) return '';
+
+    // Build list of movies with playback positions, filtered to partially watched (1%-95%)
+    var cwItems = [];
+    keys.forEach(function(title) {
+        var pos = positions[title];
+        if (!pos || !pos.position || !pos.duration) return;
+        var pct = Math.min(100, Math.round((pos.position / pos.duration) * 100));
+        // Only show partially watched items (>5% and <95%)
+        if (pct <= 5 || pct >= 95) return;
+        var m = window.allMovies.find(function(item) { return item.title === title; });
+        if (!m) return;
+        // Avoid duplicates
+        var isDup = cwItems.some(function(c) { return c.movie.title === title; });
+        if (isDup) return;
+        cwItems.push({ movie: m, pct: pct, timestamp: pos.timestamp || 0 });
+    });
+
+    if (cwItems.length === 0) return '';
+
+    // Sort by most recently watched (newest timestamp first)
+    cwItems.sort(function(a, b) { return b.timestamp - a.timestamp; });
+    cwItems = cwItems.slice(0, 10);
+
+    // Build the shelf HTML with progress bars on each card
+    var html = '<div class="shelf-section">' +
+        '<div class="shelf-title">' +
+            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                '<path d="M1 4v6h6"/>' +
+                '<path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>' +
+            '</svg>' +
+            '<span>Continue Watching</span>' +
+        '</div>' +
+        '<div class="shelf-row">';
+
+    cwItems.forEach(function(item) {
+        var m = item.movie;
+        var pct = item.pct;
+        var realIdx = window.allMovies.indexOf(m);
+        var hasPoster = !!m.posterHandle;
+        var r = m.nfoData && m.nfoData.rating;
+        var safeTitle = m.title.replace(/'/g, "\\'");
+
+        html += '<div class="shelf-card continue-watching-card" onclick="resumePlayback(\'' + safeTitle + '\')" ondblclick="resumePlayback(\'' + safeTitle + '\')" title="' + window.Utils.escHtml(m.title) + ' — ' + pct + '% watched">' +
+            '<div class="shelf-poster">' +
+                '<img class="poster-img" data-shelf="continue-watching" data-shelf-idx="' + realIdx + '">' +
+                '<div class="no-poster-placeholder"' + (hasPoster ? ' style="display:none"' : '') + '>' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
+                        '<rect x="3" y="3" width="18" height="18" rx="2"/>' +
+                        '<circle cx="8.5" cy="8.5" r="1.5"/>' +
+                        '<path d="m21 15-5-5L5 21"/>' +
+                    '</svg>' +
+                '</div>' +
+                '<div class="shelf-overlay">' +
+                    '<svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" color="#fff"><polygon points="5,3 19,12 5,21"/></svg>' +
+                '</div>' +
+                (r ? '<span class="shelf-rating">\u2605 ' + r.toFixed(1) + '</span>' : '') +
+                '<div class="continue-watching-progress">' +
+                    '<div class="cw-bar"><div class="cw-bar-fill" style="width:' + pct + '%"></div></div>' +
+                    '<span class="cw-pct">' + pct + '%</span>' +
+                '</div>' +
+            '</div>' +
+            '<div class="shelf-info">' +
+                '<div class="shelf-card-title">' + window.Utils.escHtml(m.title) + '</div>' +
+                '<div class="shelf-card-year">' + m.year + '</div>' +
+            '</div>' +
+        '</div>';
+    });
+
+    html += '</div></div>';
+    return html;
+}
+
 function renderAllTab() {
+    _revokeLogoBlobUrls();
     var container = document.getElementById('allContainer');
     var emptyState = document.getElementById('allEmptyState');
 
@@ -578,19 +901,10 @@ function renderAllTab() {
     if (topRatedContainer && !q && !hasActiveAdvancedFilters()) {
         var shelvesHtml = '';
         
-        // Continue Watching shelf (from watch history)
-        if (typeof window.getWatchHistory === 'function') {
-            var history = window.getWatchHistory().slice(0, 10);
-            if (history.length > 0) {
-                var watchedMovies = [];
-                history.forEach(function(h) {
-                    var m = window.allMovies.find(function(item) { return item.title === h.title; });
-                    if (m && watchedMovies.indexOf(m) === -1) watchedMovies.push(m);
-                });
-                if (watchedMovies.length > 0) {
-                    shelvesHtml += renderShelfRow('Continue Watching', watchedMovies.slice(0, 10), 'continue-watching');
-                }
-            }
+        // Continue Watching shelf (enhanced with progress & resume)
+        var cwShelfHtml = renderContinueWatchingShelf();
+        if (cwShelfHtml) {
+            shelvesHtml += cwShelfHtml;
         }
         
         // Recently Added shelf (sorted by last scan - use newest by year for now)
@@ -648,6 +962,7 @@ window.filterAnimationTab = function() {
 };
 
 function renderAnimationTab() {
+    _revokeLogoBlobUrls();
     var container = document.getElementById('animationContainer');
     var emptyState = document.getElementById('animationEmptyState');
     var filterCount = document.getElementById('sharedFilterCount');
@@ -698,6 +1013,7 @@ window.filterAnimeTab = function() {
 };
 
 function renderAnimeTab() {
+    _revokeLogoBlobUrls();
     var container = document.getElementById('animeContainer');
     var emptyState = document.getElementById('animeEmptyState');
     var filterCount = document.getElementById('sharedFilterCount');
@@ -785,6 +1101,7 @@ function renderTopRatedRow(container) {
                         '<polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>' +
                     '</svg>' + r.toFixed(1) +
                 '</div>' : '') +
+                getWatchProgressHtml(m.title) +
             '</div>' +
             '<div class="card-info">' +
                 '<div class="movie-title">' + window.Utils.escHtml(m.title) + '</div>' +
@@ -804,6 +1121,10 @@ function renderTopRatedRow(container) {
 // GENERIC CARD GRID BUILDER
 // ============================================================================
 function buildCardGrid(items, tabId) {
+    // Fallback: ensure currentView is a valid mode
+    if (currentView !== 'grid' && currentView !== 'detail' && currentView !== 'compact' && currentView !== 'posters' && currentView !== 'table') {
+        currentView = 'grid';
+    }
     if (currentView === 'grid') {
         return '<div class="movie-grid">' + items.map(function(m, i) {
             var r = m.nfoData && m.nfoData.rating;
@@ -824,9 +1145,14 @@ function buildCardGrid(items, tabId) {
             '</button>';
             var isWatchedItem = window.isWatched ? window.isWatched(m.title) : false;
             var watchedBadge = isWatchedItem ? '<span class="watched-badge" title="Watched"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>' : '';
+            // Watch progress bar
+            var progressHtml = getWatchProgressHtml(m.title);
 
-            return '<div class="movie-card" onclick="showItemFromTab(' + _midx + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx + ')" title="Double-click to play">' +
+            var _isSelected = window._selectedItems && window._selectedItems.indexOf(m.title) !== -1;
+            var _selectedClass = _isSelected ? ' selected' : '';
+            return '<div class="movie-card' + _selectedClass + '" draggable="true" data-title="' + window.Utils.escHtml(m.title) + '" ondragstart="event.dataTransfer.setData(\'text/plain\',this.dataset.title||\'\')" onclick="showItemFromTab(' + _midx + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx + ')" title="Double-click to play">' +
                 '<div class="poster-container">' +
+                (window._selectMode ? '<div class="card-checkbox" data-title="' + window.Utils.escHtml(m.title) + '" onclick="event.stopPropagation();toggleItemSelection(\'' + m.title.replace(/'/g, "\\'") + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>' : '') +
                     (m.logoHandle ? '<img class="logo-img" data-movie-idx="' + _midx + '">' : '') +
                     '<img class="poster-img" data-movie-idx="' + _midx + '">' +
                     '<div class="no-poster-placeholder"' + (hasPoster ? ' style="display:none"' : '') + '>' +
@@ -851,6 +1177,7 @@ function buildCardGrid(items, tabId) {
                     badgeHtml +
                     favBtn +
                     watchedBadge +
+                    progressHtml +
                 '</div>' +
                 '<div class="card-info">' +
                     '<div class="movie-title">' + window.Utils.escHtml(m.title) + '</div>' +
@@ -860,6 +1187,7 @@ function buildCardGrid(items, tabId) {
                     '</div>' +
                     (m.nfoData && m.nfoData.genres && m.nfoData.genres.length ?
                         '<div class="movie-genre">' + m.nfoData.genres.map(window.Utils.escHtml).join(', ') + '</div>' : '') +
+                    '<div class="card-user-rating">' + (typeof window.renderStarRating === 'function' ? window.renderStarRating(m.title, 'sm') : '') + '</div>' +
                     '<div class="movie-filesize">' + window.Utils.formatBytes(m.fileSize) + (m.quality ? ' \u2022 ' + window.Utils.escHtml(m.quality) : '') + '</div>' +
                 '</div>' +
             '</div>';
@@ -867,9 +1195,12 @@ function buildCardGrid(items, tabId) {
     } else if (currentView === 'detail') {
         return '<div class="movie-detail-grid">' + items.map(function(m, i) {
             var _midx2 = window.allMovies.indexOf(m);
-            return '<div class="movie-detail-card" onclick="showItemFromTab(' + _midx2 + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx2 + ')">' +
+            var _progressDetail = getWatchProgressHtml(m.title);
+            return '<div class="movie-detail-card" data-title="' + window.Utils.escHtml(m.title) + '" onclick="showItemFromTab(' + _midx2 + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx2 + ')">' +
+                (window._selectMode ? '<div class="card-checkbox card-checkbox-detail" data-title="' + window.Utils.escHtml(m.title) + '" onclick="event.stopPropagation();toggleItemSelection(\'' + m.title.replace(/'/g, "\\'") + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>' : '') +
                 '<div class="detail-poster">' +
                     '<img class="poster-img" data-movie-idx="' + _midx2 + '">' +
+                    _progressDetail +
                 '</div>' +
                 '<div class="detail-info">' +
                     '<div class="detail-title">' + window.Utils.escHtml(m.title) + '</div>' +
@@ -900,29 +1231,6 @@ function buildCardGrid(items, tabId) {
                 '</div>' +
             '</div>';
         }).join('') + '</div>';
-    } else if (currentView === VIEW_MODES.LIST) {
-        return '<div class="movie-list">' + items.map(function(m, i) {
-            var _midx3 = window.allMovies.indexOf(m);
-            return '<div class="movie-list-item" onclick="showItemFromTab(' + _midx3 + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx3 + ')">' +
-                '<div class="list-poster">' +
-                    '<img class="poster-img" data-movie-idx="' + _midx3 + '">' +
-                '</div>' +
-                '<div class="list-info">' +
-                    '<div class="list-title">' + window.Utils.escHtml(m.title) + '</div>' +
-                    '<div class="list-meta">' +
-                        '<span>' + m.year + '</span>' +
-                        (m.quality ? '<span>' + window.Utils.escHtml(m.quality) + '</span>' : '') +
-                        (m.nfoData && m.nfoData.runtime ? '<span>' + m.nfoData.runtime + 'm</span>' : '') +
-                        (m.nfoData && m.nfoData.rating ?
-                            '<span style="color:var(--star-color)">\u2605 ' + m.nfoData.rating.toFixed(1) + '</span>' : '') +
-                        '<span>' + window.Utils.formatBytes(m.fileSize) + '</span>' +
-                    '</div>' +
-                '</div>' +
-                '<svg class="list-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
-                    '<polyline points="9 18 15 12 9 6"/>' +
-                '</svg>' +
-            '</div>';
-        }).join('') + '</div>';
     } else if (currentView === 'compact' || currentView === 'posters' || currentView === 'table') {
         // Use shared buildCardItems for compact, poster wall, and table views
         return buildCardItems(items, tabId);
@@ -951,7 +1259,7 @@ async function loadTabAssets(tabId) {
                 var idx = parseInt(img.dataset.tabIdx);
                 // Find the movie in allMovies - we need to look at the container's rendered items
                 // For simplicity, find by the onclick handler's realIdx
-                var card = img.closest('.movie-card, .movie-detail-card, .movie-list-item');
+                var card = img.closest('.movie-card, .movie-detail-card');
                 if (!card) return;
                 var onclickAttr = card.getAttribute('onclick') || '';
                 var match = onclickAttr.match(/showItemFromTab\((\d+)/);
@@ -976,7 +1284,7 @@ async function loadTabAssets(tabId) {
     for (var j = 0; j < logos.length; j++) {
         (function(img) {
             (async function() {
-                var card = img.closest('.movie-card, .movie-detail-card, .movie-list-item');
+                var card = img.closest('.movie-card, .movie-detail-card');
                 if (!card) return;
                 var onclickAttr = card.getAttribute('onclick') || '';
                 var match = onclickAttr.match(/showItemFromTab\((\d+)/);
@@ -1048,6 +1356,7 @@ window.filterTVShows = function() {
  * Shows a grid of TV show cards with season/episode info
  */
 function renderTVShows() {
+    _revokeLogoBlobUrls();
     var container = document.getElementById('tvshowContainer');
     var emptyState = document.getElementById('tvshowEmptyState');
     var filterCount = document.getElementById('sharedFilterCount');
@@ -1136,10 +1445,31 @@ async function loadTVShowAssets(tvShows) {
                 }
                 try {
                     var f = await m.logoHandle.getFile();
-                    if (m.logoUrl) URL.revokeObjectURL(m.logoUrl);
-                    m.logoUrl = URL.createObjectURL(f);
+                    if (m.logoUrl && m.logoUrl.startsWith('blob:')) URL.revokeObjectURL(m.logoUrl);
+                    var _tvLogoBlobUrl = URL.createObjectURL(f);
+                    m.logoUrl = _tvLogoBlobUrl;
                     img.src = m.logoUrl;
                     img.classList.add('loaded');
+                    // Cache as data URL and replace blob to prevent memory leak
+                    if (window.saveThumbnail && m.fullPath) {
+                        try {
+                            var _tvLogoCachePath = m.fullPath + '/' + m.logoHandle.name;
+                            var _tvLogoDataUrl = await new Promise(function(resolve, reject) {
+                                var reader = new FileReader();
+                                reader.onloadend = function() { resolve(reader.result); };
+                                reader.onerror = function() { reject(new Error('FileReader failed')); };
+                                reader.readAsDataURL(f);
+                            });
+                            await window.saveThumbnail(_tvLogoCachePath, _tvLogoDataUrl);
+                            URL.revokeObjectURL(_tvLogoBlobUrl);
+                            m.logoUrl = _tvLogoDataUrl;
+                            img.src = m.logoUrl;
+                        } catch(e3) {
+                            _logoBlobUrls.push(_tvLogoBlobUrl);
+                        }
+                    } else {
+                        _logoBlobUrls.push(_tvLogoBlobUrl);
+                    }
                 } catch(e) {}
             })();
         })(logos[j]);
@@ -1186,10 +1516,31 @@ async function loadAssets() {
                 }
                 try {
                     var f = await m.logoHandle.getFile();
-                    if (m.logoUrl) URL.revokeObjectURL(m.logoUrl);
-                    m.logoUrl = URL.createObjectURL(f);
+                    if (m.logoUrl && m.logoUrl.startsWith('blob:')) URL.revokeObjectURL(m.logoUrl);
+                    var _assetsLogoBlobUrl = URL.createObjectURL(f);
+                    m.logoUrl = _assetsLogoBlobUrl;
                     img.src = m.logoUrl;
                     img.classList.add('loaded');
+                    // Cache as data URL and replace blob to prevent memory leak
+                    if (window.saveThumbnail && m.fullPath) {
+                        try {
+                            var _assetsLogoCachePath = m.fullPath + '/' + m.logoHandle.name;
+                            var _assetsLogoDataUrl = await new Promise(function(resolve, reject) {
+                                var reader = new FileReader();
+                                reader.onloadend = function() { resolve(reader.result); };
+                                reader.onerror = function() { reject(new Error('FileReader failed')); };
+                                reader.readAsDataURL(f);
+                            });
+                            await window.saveThumbnail(_assetsLogoCachePath, _assetsLogoDataUrl);
+                            URL.revokeObjectURL(_assetsLogoBlobUrl);
+                            m.logoUrl = _assetsLogoDataUrl;
+                            img.src = m.logoUrl;
+                        } catch(e3) {
+                            _logoBlobUrls.push(_assetsLogoBlobUrl);
+                        }
+                    } else {
+                        _logoBlobUrls.push(_assetsLogoBlobUrl);
+                    }
                 } catch(e) {}
             })());
         })(logos[j]);
@@ -1210,6 +1561,20 @@ function setView(view) {
         btn.classList.toggle('active', btn.dataset.view === view);
     });
 
+    // Update the sliding indicator on view-toggle
+    var viewToggle = document.querySelector('.view-toggle');
+    if (viewToggle) {
+        var viewBtns = viewToggle.querySelectorAll('.view-btn');
+        var activeIdx = -1;
+        viewBtns.forEach(function(btn, idx) {
+            if (btn.dataset.view === view) activeIdx = idx;
+        });
+        if (activeIdx >= 0) {
+            viewToggle.setAttribute('data-active', activeIdx.toString());
+            viewToggle.classList.add('has-indicator');
+        }
+    }
+
     // Re-render the currently visible tab
     renderMovies();
     renderTVShows();
@@ -1219,10 +1584,11 @@ function setView(view) {
 }
 
 /**
- * Render movies based on current view mode (grid, detail, list)
+ * Render movies based on current view mode (grid, detail, compact, posters)
  * This is specifically for the MOVIES tab (movies only, no TV shows)
  */
 function renderMovies() {
+    _revokeLogoBlobUrls();
     var container = document.getElementById('movieContainer');
     var emptyState = document.getElementById('emptyState');
     var filterCount = document.getElementById('sharedFilterCount');
@@ -1413,6 +1779,16 @@ window.resetAdvancedFilters = function() {
         window.clearCountryFilter();
     }
 
+    // Reset decade filter
+    if (typeof window.clearDecadeFilter === 'function') {
+        window.clearDecadeFilter();
+    }
+
+    // Reset watched filter
+    if (typeof window.clearWatchedFilter === 'function') {
+        window.clearWatchedFilter();
+    }
+
     updateFilterIndicator();
     updateFilterChips();
     renderAllTab();
@@ -1465,6 +1841,58 @@ function updateFilterChips() {
     if (!container) return;
 
     var chips = [];
+
+    // Search query chip
+    var searchInput = document.getElementById('searchInput');
+    if (searchInput && searchInput.value.trim()) {
+        var qVal = searchInput.value.trim();
+        if (qVal.length > 20) qVal = qVal.substring(0, 20) + '…';
+        chips.push({
+            type: 'search',
+            label: '🔍 ' + qVal,
+            onRemove: function() {
+                searchInput.value = '';
+                if (typeof window.clearSearchFilter === 'function') {
+                    window.clearSearchFilter();
+                } else {
+                    var activeTab = document.querySelector('.nav-tab.active');
+                    if (activeTab) window.switchTab(activeTab.dataset.tab);
+                }
+            }
+        });
+    }
+
+    // Decade filter chip
+    if (typeof window._selectedDecade !== 'undefined' && window._selectedDecade) {
+        chips.push({
+            type: 'decade',
+            label: '📅 ' + window._selectedDecade,
+            onRemove: function() {
+                if (typeof window.clearDecadeFilter === 'function') {
+                    window.clearDecadeFilter();
+                    var activeTab = document.querySelector('.nav-tab.active');
+                    if (activeTab) window.switchTab(activeTab.dataset.tab);
+                }
+            }
+        });
+    }
+
+    // Watched filter chip
+    if (typeof window._watchedFilter !== 'undefined' && window._watchedFilter !== 'all') {
+        var watchedLabel = window._watchedFilter === 'watched' ? '👁 Watched' : '👁 Unwatched';
+        chips.push({
+            type: 'watched',
+            label: watchedLabel,
+            onRemove: function() {
+                if (typeof window.clearWatchedFilter === 'function') {
+                    window.clearWatchedFilter();
+                    var activeTab = document.querySelector('.nav-tab.active');
+                    if (activeTab) window.switchTab(activeTab.dataset.tab);
+                }
+            }
+        });
+    }
+
     var genreSelect = document.getElementById('genreFilterSelect');
     if (genreSelect && genreSelect.value) {
         chips.push({
@@ -1602,6 +2030,12 @@ function matchesAdvancedFilters(m) {
     // Country filter
     if (typeof window.matchesCountry === 'function' && !window.matchesCountry(m)) return false;
 
+    // Decade filter
+    if (typeof window.matchesDecade === 'function' && !window.matchesDecade(m)) return false;
+
+    // Watched/Unwatched filter
+    if (typeof window.matchesWatchedFilter === 'function' && !window.matchesWatchedFilter(m)) return false;
+
     // Genre filter from select dropdown
     var genreSelect = document.getElementById('genreFilterSelect');
     if (genreSelect && genreSelect.value) {
@@ -1626,6 +2060,25 @@ function hasActiveAdvancedFilters() {
 }
 
 // Export for use in other modules
+// ============================================================================
+// SKELETON LOADING - Placeholder cards shown while library is loading
+// ============================================================================
+window.renderSkeletonGrid = function(count) {
+    count = count || 12;
+    var html = '<div class="skeleton-grid">';
+    for (var i = 0; i < count; i++) {
+        html += '<div class="skeleton-card">' +
+            '<div class="skeleton-poster"></div>' +
+            '<div class="skeleton-info">' +
+                '<div class="skeleton-text" style="width:' + (60 + Math.random() * 30) + '%"></div>' +
+                '<div class="skeleton-text-short"></div>' +
+            '</div>' +
+        '</div>';
+    }
+    html += '</div>';
+    return html;
+};
+
 window.UIRenderer = {
     updateStats: updateStats,
     toggleSkippedPanel: toggleSkippedPanel,
@@ -1640,7 +2093,9 @@ window.UIRenderer = {
     renderAnimationTab: renderAnimationTab,
     renderAnimeTab: renderAnimeTab,
     renderTopRatedRow: renderTopRatedRow,
+    renderContinueWatchingShelf: renderContinueWatchingShelf,
     populateGenreDropdowns: function() { /* deprecated - uses tag-based filter now */ },
+    revokeLogoBlobUrls: _revokeLogoBlobUrls,
     isAnimation: isAnimation,
     isAnime: isAnime
 };
@@ -1648,6 +2103,22 @@ window.UIRenderer = {
 // Also expose as global functions for inline HTML handlers
 window.filterMovies = filterMovies;
 window.setView = setView;
+
+// Initialize the view-toggle indicator on page load
+(function _initViewToggleIndicator() {
+    var viewToggle = document.querySelector('.view-toggle');
+    if (!viewToggle) return;
+    var viewBtns = viewToggle.querySelectorAll('.view-btn');
+    var activeIdx = -1;
+    viewBtns.forEach(function(btn, idx) {
+        if (btn.classList.contains('active')) activeIdx = idx;
+    });
+    if (activeIdx >= 0) {
+        viewToggle.setAttribute('data-active', activeIdx.toString());
+        viewToggle.classList.add('has-indicator');
+    }
+})();
+
 window.filterTVShows = filterTVShows;
 window.filterAllTab = filterAllTab;
 window.filterAnimationTab = filterAnimationTab;
@@ -1660,6 +2131,10 @@ window.playItemDirectly = window.playItemDirectly;
 // Used by appendMoreCards to extract just the card HTML for appending
 // ============================================================================
 function buildCardItems(items, tabId) {
+    // Fallback: ensure currentView is a valid mode
+    if (currentView !== 'grid' && currentView !== 'detail' && currentView !== 'compact' && currentView !== 'posters' && currentView !== 'table') {
+        currentView = 'grid';
+    }
     if (currentView === 'grid') {
         return items.map(function(m, i) {
             var r = m.nfoData && m.nfoData.rating;
@@ -1680,8 +2155,10 @@ function buildCardItems(items, tabId) {
             '</button>';
             var isWatchedItem = window.isWatched ? window.isWatched(m.title) : false;
             var watchedBadge = isWatchedItem ? '<span class="watched-badge" title="Watched"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>' : '';
+            // Watch progress bar
+            var progressHtml = getWatchProgressHtml(m.title);
 
-            return '<div class="movie-card card-new" onclick="showItemFromTab(' + _midx + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx + ')" title="Double-click to play">' +
+            return '<div class="movie-card card-new" draggable="true" data-title="' + window.Utils.escHtml(m.title) + '" ondragstart="event.dataTransfer.setData(\'text/plain\',this.dataset.title||\'\')" onclick="showItemFromTab(' + _midx + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx + ')" title="Double-click to play">' +
                 '<div class="poster-container">' +
                     (m.logoHandle ? '<img class="logo-img" data-movie-idx="' + _midx + '">' : '') +
                     '<img class="poster-img" data-movie-idx="' + _midx + '">' +
@@ -1707,6 +2184,7 @@ function buildCardItems(items, tabId) {
                     badgeHtml +
                     favBtn +
                     watchedBadge +
+                    progressHtml +
                 '</div>' +
                 '<div class="card-info">' +
                     '<div class="movie-title">' + window.Utils.escHtml(m.title) + '</div>' +
@@ -1723,9 +2201,12 @@ function buildCardItems(items, tabId) {
     } else if (currentView === 'detail') {
         return items.map(function(m, i) {
             var _midx2 = window.allMovies.indexOf(m);
-            return '<div class="movie-detail-card card-new" onclick="showItemFromTab(' + _midx2 + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx2 + ')">' +
+            var _progressDetail2 = getWatchProgressHtml(m.title);
+            return '<div class="movie-detail-card card-new" data-title="' + window.Utils.escHtml(m.title) + '" onclick="showItemFromTab(' + _midx2 + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx2 + ')">' +
+                (window._selectMode ? '<div class="card-checkbox card-checkbox-detail" data-title="' + window.Utils.escHtml(m.title) + '" onclick="event.stopPropagation();toggleItemSelection(\'' + m.title.replace(/'/g, "\\'") + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>' : '') +
                 '<div class="detail-poster">' +
                     '<img class="poster-img" data-movie-idx="' + _midx2 + '">' +
+                    _progressDetail2 +
                 '</div>' +
                 '<div class="detail-info">' +
                     '<div class="detail-title">' + window.Utils.escHtml(m.title) + '</div>' +
@@ -1754,35 +2235,18 @@ function buildCardItems(items, tabId) {
                 '</div>' +
             '</div>';
         }).join('');
-    } else if (currentView === 'list') {
-        return items.map(function(m, i) {
-            var _midx3 = window.allMovies.indexOf(m);
-            var r = m.nfoData && m.nfoData.rating;
-            return '<div class="movie-list-item card-new" onclick="showItemFromTab(' + _midx3 + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx3 + ')">' +
-                '<div class="list-poster">' +
-                    '<img class="poster-img" data-movie-idx="' + _midx3 + '">' +
-                '</div>' +
-                '<div class="list-info">' +
-                    '<div class="list-title">' + window.Utils.escHtml(m.title) + '</div>' +
-                    '<div class="list-meta">' +
-                        '<span>' + m.year + '</span>' +
-                        (r ? '<span>\u2605 ' + r.toFixed(1) + '</span>' : '') +
-                        (m.quality ? '<span>' + window.Utils.escHtml(m.quality) + '</span>' : '') +
-                        '<span>' + window.Utils.formatBytes(m.fileSize) + '</span>' +
-                    '</div>' +
-                '</div>' +
-                '<svg class="list-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>' +
-            '</div>';
-        }).join('');
     } else if (currentView === 'compact') {
         // Compact: small cards in a dense grid, just poster thumbnail + title + year
         return '<div class="movie-compact-grid">' + items.map(function(m, i) {
             var _midx = window.allMovies.indexOf(m);
             var isTV = m.isTVShow;
             var typeLabel = isTV ? 'TV' : 'Movie';
-            return '<div class="compact-card card-new" onclick="showItemFromTab(' + _midx + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx + ')" title="' + window.Utils.escHtml(m.title) + '">' +
+            var _progressCompact = getWatchProgressHtml(m.title);
+            return '<div class="compact-card card-new" data-title="' + window.Utils.escHtml(m.title) + '" onclick="showItemFromTab(' + _midx + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx + ')" title="' + window.Utils.escHtml(m.title) + '">' +
+                (window._selectMode ? '<div class="card-checkbox card-checkbox-compact" data-title="' + window.Utils.escHtml(m.title) + '" onclick="event.stopPropagation();toggleItemSelection(\'' + m.title.replace(/'/g, "\\'") + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>' : '') +
                 '<div class="compact-poster">' +
                     '<img class="poster-img" data-movie-idx="' + _midx + '">' +
+                    _progressCompact +
                 '</div>' +
                 '<div class="compact-info">' +
                     '<div class="compact-title">' + window.Utils.escHtml(m.title) + '</div>' +
@@ -1795,42 +2259,62 @@ function buildCardItems(items, tabId) {
         return '<div class="movie-poster-wall">' + items.map(function(m, i) {
             var _midx = window.allMovies.indexOf(m);
             var r = m.nfoData && m.nfoData.rating;
-            return '<div class="poster-wall-item card-new" onclick="showItemFromTab(' + _midx + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx + ')" title="' + window.Utils.escHtml(m.title) + ' (' + m.year + ')' + (r ? ' \u2605' + r.toFixed(1) : '') + '">' +
+            var _progressPosterWall = getWatchProgressHtml(m.title);
+            var _genres = (m.nfoData && m.nfoData.genres) ? m.nfoData.genres.slice(0, 2) : [];
+            var _genreHtml = _genres.map(function(g) { return '<span class="poster-wall-tooltip-genre">' + window.Utils.escHtml(g) + '</span>'; }).join('');
+            return '<div class="poster-wall-item card-new" data-title="' + window.Utils.escHtml(m.title) + '" onclick="showItemFromTab(' + _midx + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx + ')">' +
+                (window._selectMode ? '<div class="card-checkbox card-checkbox-poster" data-title="' + window.Utils.escHtml(m.title) + '" onclick="event.stopPropagation();toggleItemSelection(\'' + m.title.replace(/'/g, "\\'") + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>' : '') +
                 '<img class="poster-img" data-movie-idx="' + _midx + '">' +
                 '<div class="no-poster-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div>' +
                 (r ? '<span class="poster-wall-rating">\u2605' + r.toFixed(1) + '</span>' : '') +
+                _progressPosterWall +
+                '<div class="poster-wall-tooltip">' +
+                    '<div class="poster-wall-tooltip-title">' + window.Utils.escHtml(m.title) + '</div>' +
+                    '<div class="poster-wall-tooltip-year">' + (m.year || '') + '</div>' +
+                    (r ? '<div class="poster-wall-tooltip-rating"><svg viewBox="0 0 24 24"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>' + r.toFixed(1) + '</div>' : '') +
+                    (_genreHtml ? '<div class="poster-wall-tooltip-genres">' + _genreHtml + '</div>' : '') +
+                '</div>' +
             '</div>';
         }).join('') + '</div>';
     } else if (currentView === 'table') {
-        // Table: tabular data with columns for poster, title, year, type, rating, size, quality, genres
-        return '<div class="movie-table-wrapper"><table class="movie-table">' +
-            '<thead><tr>' +
-                '<th class="tbl-col-thumb"></th>' +
-                '<th class="tbl-col-title">Title</th>' +
-                '<th class="tbl-col-year">Year</th>' +
-                '<th class="tbl-col-type">Type</th>' +
-                '<th class="tbl-col-rating">Rating</th>' +
-                '<th class="tbl-col-size">Size</th>' +
-                '<th class="tbl-col-quality">Quality</th>' +
-                '<th class="tbl-col-genres">Genres</th>' +
-            '</tr></thead><tbody>' +
-            items.map(function(m, i) {
+        // Apply table-specific column sorting if active
+        var _tableItems = items.slice();
+        if (_tableSortColumn) {
+            _tableItems = _applyTableSort(_tableItems);
+        }
+        return '<div class="movie-table-view">' +
+            '<div class="movie-table-header">' +
+                '<div class="mt-col mt-col-poster"></div>' +
+                '<div class="mt-col mt-col-title"><span class="mt-sort-header' + _getTableSortClass('title') + '" onclick="sortTableColumn(\'title\')">Title<span class="mt-sort-indicator">' + _getTableSortIndicator('title') + '</span></span></div>' +
+                '<div class="mt-col mt-col-year"><span class="mt-sort-header' + _getTableSortClass('year') + '" onclick="sortTableColumn(\'year\')">Year<span class="mt-sort-indicator">' + _getTableSortIndicator('year') + '</span></span></div>' +
+                '<div class="mt-col mt-col-rating"><span class="mt-sort-header' + _getTableSortClass('rating') + '" onclick="sortTableColumn(\'rating\')">Rating<span class="mt-sort-indicator">' + _getTableSortIndicator('rating') + '</span></span></div>' +
+                '<div class="mt-col mt-col-genres"><span class="mt-sort-header' + _getTableSortClass('genres') + '" onclick="sortTableColumn(\'genres\')">Genres<span class="mt-sort-indicator">' + _getTableSortIndicator('genres') + '</span></span></div>' +
+                '<div class="mt-col mt-col-size"><span class="mt-sort-header' + _getTableSortClass('size') + '" onclick="sortTableColumn(\'size\')">Size<span class="mt-sort-indicator">' + _getTableSortIndicator('size') + '</span></span></div>' +
+                '<div class="mt-col mt-col-quality"><span class="mt-sort-header' + _getTableSortClass('quality') + '" onclick="sortTableColumn(\'quality\')">Quality<span class="mt-sort-indicator">' + _getTableSortIndicator('quality') + '</span></span></div>' +
+            '</div>' +
+            _tableItems.map(function(m, i) {
                 var _midx = window.allMovies.indexOf(m);
                 var r = m.nfoData && m.nfoData.rating;
-                var typeLabel = m.isTVShow ? 'TV Show' : 'Movie';
-                var genres = (m.nfoData && m.nfoData.genres) ? m.nfoData.genres.slice(0, 3).map(window.Utils.escHtml).join(', ') : '';
-                return '<tr class="tbl-row card-new" onclick="showItemFromTab(' + _midx + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx + ')" style="cursor:pointer">' +
-                    '<td class="tbl-col-thumb"><img class="poster-img tbl-thumb" data-movie-idx="' + _midx + '"></td>' +
-                    '<td class="tbl-col-title">' + window.Utils.escHtml(m.title) + '</td>' +
-                    '<td class="tbl-col-year">' + m.year + '</td>' +
-                    '<td class="tbl-col-type"><span class="tbl-type-badge tbl-type-' + (m.isTVShow ? 'tv' : 'movie') + '">' + typeLabel + '</span></td>' +
-                    '<td class="tbl-col-rating">' + (r ? '<span class="tbl-rating">\u2605 ' + r.toFixed(1) + '</span>' : '-') + '</td>' +
-                    '<td class="tbl-col-size">' + window.Utils.formatBytes(m.fileSize) + '</td>' +
-                    '<td class="tbl-col-quality">' + (m.quality ? window.Utils.escHtml(m.quality) : '-') + '</td>' +
-                    '<td class="tbl-col-genres">' + genres + '</td>' +
-                '</tr>';
-            }).join('') +
-            '</tbody></table></div>';
+                var genres = (m.nfoData && m.nfoData.genres) ? m.nfoData.genres.slice(0, 3).join(', ') : '';
+                var isFav = window.isFavorite ? window.isFavorite(m.title) : false;
+                var isWatchedItem = window.isWatched ? window.isWatched(m.title) : false;
+                var _isSelected = window._selectedItems && window._selectedItems.indexOf(m.title) !== -1;
+                var _selectedClass = _isSelected ? ' selected' : '';
+                return '<div class="movie-table-row' + _selectedClass + '" onclick="showItemFromTab(' + _midx + ',\'' + tabId + '\')" ondblclick="playItemDirectly(' + _midx + ')" data-title="' + window.Utils.escHtml(m.title) + '">' +
+                    '<div class="mt-col mt-col-poster"><img class="poster-img" data-movie-idx="' + _midx + '"></div>' +
+                    '<div class="mt-col mt-col-title">' +
+                        (window._selectMode ? '<div class="card-checkbox" data-title="' + window.Utils.escHtml(m.title) + '" onclick="event.stopPropagation();toggleItemSelection(\'' + m.title.replace(/'/g, "\\'") + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>' : '') +
+                        '<span class="mt-title-text">' + window.Utils.escHtml(m.title) + '</span>' +
+                        (isFav ? '<svg class="mt-fav-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>' : '') +
+                        (isWatchedItem ? '<svg class="mt-watched-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>' : '') +
+                    '</div>' +
+                    '<div class="mt-col mt-col-year">' + m.year + '</div>' +
+                    '<div class="mt-col mt-col-rating">' + (r ? '<span class="mt-rating">\u2605 ' + r.toFixed(1) + '</span>' : '\u2014') + '</div>' +
+                    '<div class="mt-col mt-col-genres">' + (genres ? window.Utils.escHtml(genres) : '\u2014') + '</div>' +
+                    '<div class="mt-col mt-col-size">' + window.Utils.formatBytes(m.fileSize) + '</div>' +
+                    '<div class="mt-col mt-col-quality">' + (m.quality ? window.Utils.escHtml(m.quality) : '\u2014') + '</div>' +
+                '</div>';
+            }).join('') + '</div>';
     }
     return '';
 }
@@ -1854,8 +2338,9 @@ function buildTVShowCardItems(items) {
         var isWatchedItem = window.isWatched ? window.isWatched(m.title) : false;
         var watchedBadge = isWatchedItem ? '<span class="watched-badge" title="Watched"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>' : '';
 
-        return '<div class="movie-card tvshow-card card-new" onclick="showTVShowFromTab(' + realIdx + ')" ondblclick="playItemDirectly(' + realIdx + ')" title="Double-click to play">' +
+        return '<div class="movie-card tvshow-card card-new" draggable="true" data-title="' + window.Utils.escHtml(m.title) + '" ondragstart="event.dataTransfer.setData(\'text/plain\',this.dataset.title||\'\')" onclick="showTVShowFromTab(' + realIdx + ')" ondblclick="playItemDirectly(' + realIdx + ')" title="Double-click to play">' +
             '<div class="poster-container">' +
+                (window._selectMode ? '<div class="card-checkbox" data-title="' + window.Utils.escHtml(m.title) + '" onclick="event.stopPropagation();toggleItemSelection(\'' + m.title.replace(/'/g, "\\'") + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>' : '') +
                 (m.logoHandle ? '<img class="logo-img" data-movie-idx="' + realIdx + '">' : '') +
                 '<img class="poster-img" data-movie-idx="' + realIdx + '">' +
                 '<div class="no-poster-placeholder"' + (hasPoster ? ' style="display:none"' : '') + '>' +
@@ -1879,6 +2364,7 @@ function buildTVShowCardItems(items) {
                 badgeHtml +
                 favBtn +
                 watchedBadge +
+                getWatchProgressHtml(m.title) +
             '</div>' +
             '<div class="card-info">' +
                 '<div class="movie-title">' + window.Utils.escHtml(m.title) + '</div>' +
@@ -1945,7 +2431,7 @@ function appendMoreCards(tabId, fromIndex, toIndex) {
     if (!container) return;
 
     // Find the existing grid inside the container
-    var gridContainer = container.querySelector('.movie-grid, .movie-detail-grid, .movie-list, .movie-compact-grid, .movie-poster-wall, .movie-table tbody');
+    var gridContainer = container.querySelector('.movie-grid, .movie-detail-grid, .movie-compact-grid, .movie-poster-wall');
 
     // Remove the old infinite scroll sentinel
     var oldSentinel = container.querySelector('.infinite-scroll-sentinel');
@@ -1967,7 +2453,7 @@ function appendMoreCards(tabId, fromIndex, toIndex) {
         gridContainer.insertAdjacentHTML('beforeend', newCardsHtml);
     } else {
         // No grid found, create one
-        var gridClass = currentView === 'detail' ? 'movie-detail-grid' : (currentView === 'list' ? 'movie-list' : (currentView === 'compact' ? 'movie-compact-grid' : (currentView === 'posters' ? 'movie-poster-wall' : (currentView === 'table' ? 'movie-table-wrapper' : 'movie-grid'))));
+        var gridClass = currentView === 'detail' ? 'movie-detail-grid' : (currentView === 'compact' ? 'movie-compact-grid' : (currentView === 'posters' ? 'movie-poster-wall' : 'movie-grid'));
         if (tabId === 'tvshows') gridClass = 'movie-grid tvshow-grid';
         container.insertAdjacentHTML('beforeend', '<div class="' + gridClass + '">' + newCardsHtml + '</div>');
     }

@@ -70,12 +70,26 @@ window.getLastWatched = function(title) {
     return null;
 };
 
+var _lastClearedHistory = null;
+
 /**
- * Clear all watch history
+ * Clear all watch history (with undo support)
  */
 window.clearWatchHistory = function() {
+    // Save for undo
+    _lastClearedHistory = getWatchHistory().slice();
     localStorage.removeItem(HISTORY_KEY);
-    window.Utils.showToast('Watch history cleared', 'success');
+    window.Utils.showToast('Watch history cleared', 'warning', {
+        action: 'Undo',
+        onAction: function() {
+            if (_lastClearedHistory) {
+                saveWatchHistory(_lastClearedHistory);
+                _lastClearedHistory = null;
+                window.Utils.showToast('Watch history restored!', 'success');
+                if (typeof renderHistoryTab === 'function') window.renderHistoryTab();
+            }
+        }
+    });
     if (typeof renderHistoryTab === 'function') window.renderHistoryTab();
 };
 
@@ -112,7 +126,14 @@ window.renderHistoryTab = function() {
 
     if (q) {
         history = history.filter(function(h) {
-            return h.title.toLowerCase().includes(q);
+            // First check title match (fast path)
+            if (h.title.toLowerCase().includes(q)) return true;
+            // Then check actor/director/writer via the global matchesSearch
+            var movie = window.allMovies.find(function(m) { return m.title === h.title; });
+            if (movie && typeof window.matchesSearch === 'function') {
+                return window.matchesSearch(movie, q);
+            }
+            return false;
         });
     }
 

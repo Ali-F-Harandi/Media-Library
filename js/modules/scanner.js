@@ -512,11 +512,13 @@ async function scanFolders(dirs) {
             // First try to process as TV show folder
             var r = await processTVShowFolder(entries[i], dir.name);
             if (r.tvshow) {
+                r.tvshow.scanDate = Date.now();
                 window.allMovies.push(r.tvshow);
             } else {
                 // If not a TV show, try processing as movie
                 r = await processMovieFolder(entries[i], dir.name);
                 if (r.movie) {
+                    r.movie.scanDate = Date.now();
                     window.allMovies.push(r.movie);
                 } else if (r.reason) {
                     window.skippedFolders.push({ name: entries[i].name, reason: r.reason });

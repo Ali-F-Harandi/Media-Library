@@ -42,9 +42,24 @@ window.removeFromPlaylist = function(title) {
     if (typeof window.renderPlaylistTab === 'function') window.renderPlaylistTab();
 };
 
+var _lastClearedPlaylist = null;
+var _clearPlaylistTimeout = null;
+
 window.clearPlaylist = function() {
+    // Save current playlist for undo
+    _lastClearedPlaylist = getPlaylist().slice();
     localStorage.removeItem(PLAYLIST_KEY);
-    window.Utils.showToast('Playlist cleared', 'success');
+    window.Utils.showToast('Playlist cleared', 'warning', {
+        action: 'Undo',
+        onAction: function() {
+            if (_lastClearedPlaylist) {
+                savePlaylist(_lastClearedPlaylist);
+                _lastClearedPlaylist = null;
+                window.Utils.showToast('Playlist restored!', 'success');
+                if (typeof window.renderPlaylistTab === 'function') window.renderPlaylistTab();
+            }
+        }
+    });
     if (typeof window.renderPlaylistTab === 'function') window.renderPlaylistTab();
 };
 
@@ -175,6 +190,7 @@ window.renderPlaylistTab = function() {
 
     if (q) {
         items = items.filter(function(m) {
+            if (typeof window.matchesSearch === 'function') return window.matchesSearch(m, q);
             return m.title.toLowerCase().includes(q);
         });
     }
@@ -241,4 +257,34 @@ window.renderPlaylistTab = function() {
     setupPlaylistDragDrop();
 };
 
-window.Playlist = { addToPlaylist: window.addToPlaylist, removeFromPlaylist: window.removeFromPlaylist, getPlaylist: getPlaylist, clearPlaylist: window.clearPlaylist, isInPlaylist: window.isInPlaylist, renderPlaylistTab: window.renderPlaylistTab };
+// ============================================================================
+// PLAYLIST AUTO-ADVANCE - Automatically play next item when current ends
+// ============================================================================
+var AUTO_ADVANCE_KEY = 'movieLibAutoAdvance';
+
+window.getAutoAdvance = function() {
+    try {
+        return localStorage.getItem(AUTO_ADVANCE_KEY) !== 'false';
+    } catch(e) {
+        return true;
+    }
+};
+
+window.setAutoAdvance = function(enabled) {
+    localStorage.setItem(AUTO_ADVANCE_KEY, enabled ? 'true' : 'false');
+    window.Utils.showToast('Auto-advance ' + (enabled ? 'enabled' : 'disabled'), 'info');
+};
+
+/**
+ * Play the next item in the playlist after current video ends
+ * Called from video player 'ended' event
+ */
+window.playNextPlaylistItem = function() {
+    if (!window.getAutoAdvance()) return false;
+    var list = getPlaylist();
+    if (list.length === 0) return false;
+    window.playNextInPlaylist();
+    return true;
+};
+
+window.Playlist = { addToPlaylist: window.addToPlaylist, removeFromPlaylist: window.removeFromPlaylist, getPlaylist: getPlaylist, clearPlaylist: window.clearPlaylist, isInPlaylist: window.isInPlaylist, renderPlaylistTab: window.renderPlaylistTab, getAutoAdvance: window.getAutoAdvance, setAutoAdvance: window.setAutoAdvance, playNextPlaylistItem: window.playNextPlaylistItem };

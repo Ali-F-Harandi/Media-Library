@@ -54,9 +54,10 @@ window.renderFavoritesTab = function() {
         return favTitles.indexOf(m.title) !== -1;
     });
 
-    // Apply search filter
+    // Apply search filter (titles, actors, directors, writers)
     if (q) {
         items = items.filter(function(m) {
+            if (typeof window.matchesSearch === 'function') return window.matchesSearch(m, q);
             return m.title.toLowerCase().includes(q) || m.year.includes(q);
         });
     }

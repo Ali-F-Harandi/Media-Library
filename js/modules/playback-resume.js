@@ -64,7 +64,7 @@ function savePlaybackPositions(positions) {
  * @param {number} duration - Total video duration in seconds
  */
 window.savePlaybackPosition = function(title, position, duration) {
-    if (!title || !position || !duration) return;
+    if (!title || position == null || !duration) return;
     var positions = window.getPlaybackPositions();
     positions[title] = {
         position: position,
@@ -222,29 +222,48 @@ function removeResumeButton() {
 window.setupPlaybackResumeListeners = function(videoEl, title) {
     if (!videoEl || !title) return;
     
+    // Remove existing listeners from a previous call to prevent accumulation
+    if (videoEl._playbackResumeListeners) {
+        var old = videoEl._playbackResumeListeners;
+        videoEl.removeEventListener('timeupdate', old.onTimeUpdate);
+        videoEl.removeEventListener('ended', old.onEnded);
+        videoEl.removeEventListener('pause', old.onPause);
+    }
+    
     // Throttled timeupdate handler - saves position every 5 seconds
-    videoEl.addEventListener('timeupdate', function() {
+    var onTimeUpdate = function() {
         var now = Date.now();
         if (now - _lastSaveTime < TIMEUPDATE_THROTTLE) return;
         _lastSaveTime = now;
         
-        if (videoEl.currentTime && videoEl.duration && !isNaN(videoEl.duration)) {
+        if (videoEl.currentTime != null && videoEl.duration && !isNaN(videoEl.duration)) {
             window.savePlaybackPosition(title, videoEl.currentTime, videoEl.duration);
         }
-    });
+    };
     
     // When video ends naturally, clear the saved position
-    videoEl.addEventListener('ended', function() {
+    var onEnded = function() {
         window.clearPlaybackPosition(title);
         removeResumeButton();
-    });
+    };
     
     // When video is paused, also save position immediately
-    videoEl.addEventListener('pause', function() {
-        if (videoEl.currentTime && videoEl.duration) {
+    var onPause = function() {
+        if (videoEl.currentTime != null && videoEl.duration) {
             window.savePlaybackPosition(title, videoEl.currentTime, videoEl.duration);
         }
-    });
+    };
+    
+    // Store listener references for future cleanup
+    videoEl._playbackResumeListeners = {
+        onTimeUpdate: onTimeUpdate,
+        onEnded: onEnded,
+        onPause: onPause
+    };
+    
+    videoEl.addEventListener('timeupdate', onTimeUpdate);
+    videoEl.addEventListener('ended', onEnded);
+    videoEl.addEventListener('pause', onPause);
 };
 
 // Expose PlaybackResume namespace
@@ -255,4 +274,24 @@ window.PlaybackResume = {
     clearPosition: window.clearPlaybackPosition,
     offerResume: window.offerResumePlayback,
     setupListeners: window.setupPlaybackResumeListeners
+};
+
+/**
+ * Resume playback for a movie by title
+ * Finds the movie in allMovies, sets filteredMovies, and calls VideoPlayer.playMovie
+ * The video player already resumes from the saved position via offerResumePlayback
+ * @param {string} title - Movie title to resume
+ */
+window.resumePlayback = function(title) {
+    if (!title || !window.allMovies) return;
+    var m = window.allMovies.find(function(item) { return item.title === title; });
+    if (!m) return;
+    window.filteredMovies = window.allMovies;
+    var filteredIdx = window.filteredMovies.indexOf(m);
+    if (filteredIdx === -1) return;
+    if (m.isTVShow && typeof window.playTVShowFirstEpisode === 'function') {
+        window.playTVShowFirstEpisode(filteredIdx);
+    } else if (window.VideoPlayer && typeof window.VideoPlayer.playMovie === 'function') {
+        window.VideoPlayer.playMovie(filteredIdx);
+    }
 };

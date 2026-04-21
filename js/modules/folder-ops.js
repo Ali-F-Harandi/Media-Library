@@ -286,6 +286,8 @@ async function startScanning(dirs) {
         msg += ' (' + movieCount + ' movies, ' + tvShowCount + ' TV shows)';
     }
     window.Utils.showToast(msg, 'success');
+    // Show library summary toast with size info
+    if (typeof window.showLibrarySummary === 'function') window.showLibrarySummary();
 }
 
 // Export for use in other modules
